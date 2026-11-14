@@ -150,7 +150,7 @@
   font-size: 13px;
   font-weight: 600;
 }
-.matrix-repeat input { width: 72px; }
+.matrix-repeat input { width: 96px; }
 .matrix-repeat-hint { font-weight: 400; color: var(--muted); font-size: 12px; }
 
 .matrix-progress {
