@@ -6,7 +6,7 @@ import type { Cls } from './store.js';
 /** 2xx 判 ok 时，响应体需含的「模型回复/模型列表迹象」标记（按协议/请求形态传入） */
 export interface ClassifyInput {
   httpStatus: number | null;
-  body: string; // rawSnippet（上游原文片段）
+  body: string; // 完整上游响应体（供 JSON.parse 判定 ok 迹象；展示截断由 rawSnippet 负责）
   timedOut: boolean;
   okMarkers?: string[]; // 如 ['choices'] / ['models']
 }

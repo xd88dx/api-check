@@ -105,7 +105,7 @@ export async function runTest(store: Store, channelId: string, opts: RunTestOpts
         const latency = Date.now() - startedAt;
 
         const cell: CellResult = {
-          cls: classify({ httpStatus: res.status, body: snippet(res.body), timedOut: res.timedOut, okMarkers: spec.okMarkers }),
+          cls: classify({ httpStatus: res.status, body: res.body, timedOut: res.timedOut, okMarkers: spec.okMarkers }),
           latencyMs: latency,
           httpStatus: res.status,
           rawSnippet: snippet(res.body),

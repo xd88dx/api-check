@@ -3,7 +3,7 @@
 // 失败/空目录明确报错并保留现有目录，绝不清空。
 import { URL } from 'node:url';
 import { request } from './httpclient.js';
-import { classify, snippet } from './classify.js';
+import { classify } from './classify.js';
 import { firstOkProtocol, buildProbeUrl, type Protocol } from './probe.js';
 import type { ProbeResult, ChannelModel } from './store.js';
 
@@ -51,7 +51,7 @@ async function fetchOpenAI(urlStr: string, opts: FetchOpts): Promise<CatalogFetc
   const url = new URL(urlStr);
   const headers: Record<string, string> = { Authorization: `Bearer ${opts.apiKey}` };
   const res = await request({ url, method: 'GET', headers, timeoutMs: opts.timeoutMs ?? 60000, insecure: opts.insecure });
-  const cls = classify({ httpStatus: res.status, body: snippet(res.body), timedOut: res.timedOut, okMarkers: ['data'] });
+  const cls = classify({ httpStatus: res.status, body: res.body, timedOut: res.timedOut, okMarkers: ['data'] });
   if (cls !== 'ok') {
     return { ok: false, models: [], error: `${cls}:${res.status ?? 'net'}` };
   }
@@ -75,7 +75,7 @@ async function fetchAnthropic(urlStr: string, opts: FetchOpts): Promise<CatalogF
     'anthropic-version': '2023-06-01',
   };
   const res = await request({ url, method: 'GET', headers, timeoutMs: opts.timeoutMs ?? 60000, insecure: opts.insecure });
-  const cls = classify({ httpStatus: res.status, body: snippet(res.body), timedOut: res.timedOut, okMarkers: ['data'] });
+  const cls = classify({ httpStatus: res.status, body: res.body, timedOut: res.timedOut, okMarkers: ['data'] });
   if (cls !== 'ok') {
     return { ok: false, models: [], error: `${cls}:${res.status ?? 'net'}` };
   }
@@ -94,7 +94,7 @@ async function fetchGemini(urlStr: string, opts: FetchOpts): Promise<CatalogFetc
   url.searchParams.set('pageSize', '1000');
   url.searchParams.set('key', opts.apiKey);
   const res = await request({ url, method: 'GET', headers: {}, timeoutMs: opts.timeoutMs ?? 60000, insecure: opts.insecure });
-  const cls = classify({ httpStatus: res.status, body: snippet(res.body), timedOut: res.timedOut, okMarkers: ['models'] });
+  const cls = classify({ httpStatus: res.status, body: res.body, timedOut: res.timedOut, okMarkers: ['models'] });
   if (cls !== 'ok') {
     return { ok: false, models: [], error: `${cls}:${res.status ?? 'net'}` };
   }

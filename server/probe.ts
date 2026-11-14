@@ -111,7 +111,7 @@ async function probeOne(proto: Protocol, opts: ProbeOpts): Promise<ProbeResult> 
   const latency = Date.now() - startedAt;
   return {
     url: spec.displayUrl,
-    cls: classify({ httpStatus: res.status, body: snippet(res.body), timedOut: res.timedOut, okMarkers: spec.okMarkers }),
+    cls: classify({ httpStatus: res.status, body: res.body, timedOut: res.timedOut, okMarkers: spec.okMarkers }),
     latencyMs: latency,
     httpStatus: res.status,
     rawSnippet: snippet(res.body),
