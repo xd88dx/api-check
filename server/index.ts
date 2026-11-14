@@ -9,7 +9,7 @@ import { logger } from './logger.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function main() {
-  const store = new Store('data');
+  const store = new Store(process.env.DATA_DIR || 'data');
   await store.init();
   logger.info('store restored', { channels: store.getConfig().channels.length });
 

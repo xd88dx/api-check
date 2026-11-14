@@ -22,6 +22,19 @@ function formatLatency(ms: number, t: (k: string) => string): string {
   return ms < 1000 ? `${ms} ${t('matrix.ms')}` : `${(ms / 1000).toFixed(1)} ${t('matrix.sec')}`;
 }
 
+function formatTimestamp(iso: string, t: (k: string) => string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  if (t('matrix.dateOrder') === 'MDY') {
+    return `${mo}/${day}/${y} ${hh}:${mm}`;
+  }
+  return `${y}-${mo}-${day} ${hh}:${mm}`;
+}
+
 export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
   const { t } = useTranslation();
   const [task, setTask] = useState<TaskState | null>(null);
@@ -100,6 +113,15 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
     await onRefresh();
   };
 
+  const exportChannel = () => {
+    const a = document.createElement('a');
+    a.href = api.exportChannel(channel.id);
+    a.download = `api-check-export-${channel.name}-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const progress = useMemo(() => {
     const total = task?.total ?? 0;
     const idx = task?.current?.index ?? (task?.running ? 0 : total);
@@ -117,6 +139,9 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
             disabled={running || selectedModels.length === 0}
           >
             {t('matrix.selectAvailable')}
+          </button>
+          <button type="button" onClick={exportChannel} disabled={running}>
+            {t('matrix.export')}
           </button>
           {running ? (
             <button type="button" className="danger" onClick={() => void stop()}>
@@ -219,7 +244,7 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
           </tbody>
         </table>
       )}
-      {channel.state?.lastTestAt && <p className="catalog-ts">{t('matrix.lastTestAt')}{channel.state.lastTestAt}</p>}
+      {channel.state?.lastTestAt && <p className="catalog-ts">{t('matrix.lastTestAt')}{formatTimestamp(channel.state.lastTestAt, t)}</p>}
     </section>
   );
 }

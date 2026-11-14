@@ -71,4 +71,7 @@ export const api = {
   stopTest(): Promise<{ ok: boolean; stopped: number }> {
     return request('/test/stop', { method: 'POST', body: JSON.stringify({}) });
   },
+  exportChannel(id: string): string {
+    return `/api/channels/${id}/export`;
+  },
 };

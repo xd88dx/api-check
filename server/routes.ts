@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { json as expressJson, Router, type Request, type Response, type NextFunction } from 'express';
 import { z, ZodError } from 'zod';
-import type { Store, Channel, ChannelKey, ProbeResult } from './store.js';
+import type { Store, Channel, ChannelKey, ChannelState, ProbeResult } from './store.js';
 import { mask } from './mask.js';
 import { acquireTask, getTask, runProbe, runCatalog, stopAllTestTasks } from './tasks.js';
 import { runTest } from './runner.js';
@@ -102,6 +102,44 @@ function findChannel(store: Store, id: string): Channel {
   const ch = store.getConfig().channels.find((c) => c.id === id);
   if (!ch) throw new HttpError(404, 'channel not found');
   return ch;
+}
+
+/** 导出负载：渠道信息 + 勾选模型清单 + 最近矩阵结果摘要；不含任何 key 字段（连掩码/id 也不出） */
+export function buildExportPayload(ch: Channel, st?: ChannelState) {
+  const labelById = new Map(ch.keys.map((k) => [k.id, k.label]));
+  const results = st?.results
+    ? Object.fromEntries(
+        Object.entries(st.results).map(([modelId, row]) => [
+          modelId,
+          Object.fromEntries(
+            Object.entries(row).map(([keyId, cell]) => [
+              labelById.get(keyId) ?? keyId,
+              { cls: cell.cls, latencyMs: cell.latencyMs, httpStatus: cell.httpStatus, at: cell.at },
+            ]),
+          ),
+        ]),
+      )
+    : null;
+  return {
+    exportedAt: new Date().toISOString(),
+    channel: {
+      name: ch.name,
+      baseUrl: ch.baseUrl,
+      insecure: ch.insecure,
+      enabled: ch.enabled,
+      createdAt: ch.createdAt,
+      keyCount: ch.keys.length,
+    },
+    selectedModels: ch.models
+      .filter((m) => m.selected)
+      .map((m) => ({
+        id: m.id,
+        source: m.source,
+        ...(m.contextHint ? { contextHint: m.contextHint } : {}),
+      })),
+    lastTestAt: st?.lastTestAt ?? null,
+    results,
+  };
 }
 
 /** 渠道状态（probe/catalog/矩阵结果与任务快照），供前端展示 */
@@ -320,11 +358,18 @@ export function createRouter(store: Store): Router {
     res.json({ ok: true, stopped: n });
   });
 
-  // ---- M4 占位：导出 ----
-  const notImplemented = (_req: Request, res: Response) => {
-    res.status(501).json({ error: 'not_implemented', detail: 'planned for M4' });
-  };
-  r.get('/channels/:id/export', notImplemented);
+  // ---- M4：导出（渠道信息 + 勾选模型清单 + 最近矩阵结果摘要；不含任何 key 字段） ----
+  r.get('/channels/:id/export', (req, res) => {
+    const ch = findChannel(store, req.params.id);
+    const payload = buildExportPayload(ch, store.getState().channels[ch.id]);
+    const encoded = encodeURIComponent(`api-check-export-${new Date().toISOString().slice(0, 10)}.json`);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="api-check-export.json"; filename*=UTF-8''${encoded}`,
+    );
+    res.send(JSON.stringify(payload, null, 2));
+  });
 
   return r;
 }
