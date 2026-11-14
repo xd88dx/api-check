@@ -65,6 +65,11 @@ const testStartSchema = z.object({
   keyIds: z.array(z.string().min(1)).optional(),
   intervalMs: z.number().int().min(0).max(600000).optional(),
   timeoutMs: z.number().int().min(1000).max(600000).optional(),
+  repeat: z.number().int().min(1).max(10).optional(),
+});
+
+const probeStartSchema = z.object({
+  model: z.string().min(1).max(200).optional(),
 });
 
 // ---------- helpers ----------
@@ -203,13 +208,14 @@ export function createRouter(store: Store): Router {
   const r = Router();
   r.use(expressJson());
 
-  // 渠道列表（key 掩码；附带探测/目录状态）
+  // 渠道列表（key 掩码；附带探测/目录状态；附全局测试默认值供前端预填）
   r.get('/channels', (_req, res) => {
     res.json({
       channels: store.getConfig().channels.map((ch) => ({
         ...toPublicChannel(ch),
         state: channelStatePublic(store, ch.id),
       })),
+      testDefaults: store.getConfig().testDefaults,
     });
   });
 
@@ -292,12 +298,13 @@ export function createRouter(store: Store): Router {
 
   // ---- M2：探测 / 目录 / 任务轮询 ----
 
-  // 四协议探测（后台任务）
+  // 四协议探测（后台任务；body.model 可选：指定时四协议全部用该模型，不走目录候选循环）
   r.post('/channels/:id/probe', (req, res) => {
     const ch = findChannel(store, req.params.id);
+    const body = probeStartSchema.parse(req.body ?? {});
     const task = acquireTask(ch.id, 'probe', 4);
     if (!task) throw new HttpError(409, 'task_already_running');
-    void runProbe(store, ch.id);
+    void runProbe(store, ch.id, body.model ? { model: body.model } : undefined);
     res.status(202).json({ task });
   });
 
@@ -338,7 +345,7 @@ export function createRouter(store: Store): Router {
 
   // ---- M3：矩阵测试 ----
 
-  // 启动矩阵（后台任务）
+  // 启动矩阵（后台任务；body.repeat 显式给出时持久化至 testDefaults.repeat）
   r.post('/channels/:id/test', (req, res) => {
     const ch = findChannel(store, req.params.id);
     const body = testStartSchema.parse(req.body ?? {});
@@ -348,6 +355,10 @@ export function createRouter(store: Store): Router {
     }
     const task = acquireTask(ch.id, 'test', 0);
     if (!task) throw new HttpError(409, 'task_already_running');
+    if (body.repeat !== undefined) {
+      store.getConfig().testDefaults.repeat = body.repeat;
+      void store.saveConfig();
+    }
     void runTest(store, ch.id, body);
     res.status(202).json({ task });
   });

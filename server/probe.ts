@@ -146,9 +146,8 @@ export async function probeAll(opts: ProbeAllOpts): Promise<Record<string, Probe
     ? Array.isArray(opts.model) ? opts.model : [opts.model]
     : [FALLBACK_MODEL];
   const candidates: string[] = rawCandidates.slice(0, MAX_CANDIDATES);
-  const hasCatalog = !!opts.model;
-  // 单候选超时收紧（仅目录非空时），避免 3×60s 等待
-  const perTimeout = hasCatalog
+  // 多候选（目录模式）单候选超时收紧，避免 3×60s 等待；单候选（占位/指定模型）用完整超时
+  const perTimeout = candidates.length > 1
     ? Math.min(opts.timeoutMs ?? 60000, CANDIDATE_TIMEOUT_CAP_MS)
     : (opts.timeoutMs ?? 60000);
   for (const proto of PROTOCOLS) {

@@ -25,6 +25,7 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
   const [task, setTask] = useState<TaskState | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [manualName, setManualName] = useState('');
+  const [filter, setFilter] = useState(''); // §12.3：客户端关键字过滤（大小写不敏感子串）
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const poll = useCallback(async () => {
@@ -42,11 +43,26 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
     }
   }, [channel.id, onRefresh]);
 
+  // M5 G6 加固：挂载时若已有运行中任务恢复轮询
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { task: tsk } = await api.getTask(channel.id);
+        if (cancelled) return;
+        if (tsk?.running) {
+          setTask(tsk);
+          timer.current = setTimeout(() => void poll(), 800);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
     return () => {
+      cancelled = true;
       if (timer.current) clearTimeout(timer.current);
     };
-  }, []);
+  }, [channel.id, poll]);
 
   const refresh = async () => {
     setLastError(null);
@@ -91,15 +107,20 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
 
   const running = task?.running === true;
   const catalogAt = channel.state?.catalogAt;
+  // 过滤只影响展示，不影响勾选状态/手动添加/重取（§12.3）
+  const kw = filter.trim().toLowerCase();
+  const visibleModels = kw
+    ? channel.models.filter((m) => m.id.toLowerCase().includes(kw))
+    : channel.models;
 
   return (
     <section className="catalog-panel">
       <div className="content-head">
         <h3>{t('catalog.title')}</h3>
         <div className="catalog-actions">
-          <button type="button" onClick={() => void selectAll()}>{t('catalog.selectAll')}</button>
-          <button type="button" onClick={() => void selectNone()}>{t('catalog.selectNone')}</button>
-          <button type="button" disabled={running} onClick={() => void refresh()}>
+          <button type="button" className="ghost" onClick={() => void selectAll()}>{t('catalog.selectAll')}</button>
+          <button type="button" className="ghost" onClick={() => void selectNone()}>{t('catalog.selectNone')}</button>
+          <button type="button" className="primary" disabled={running} onClick={() => void refresh()}>
             {running ? t('catalog.refreshing') : t('catalog.refresh')}
           </button>
         </div>
@@ -116,6 +137,11 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
       )}
       <div className="catalog-add">
         <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder={t('catalog.filterPlaceholder')}
+        />
+        <input
           value={manualName}
           onChange={(e) => setManualName(e.target.value)}
           placeholder={t('catalog.addManualPlaceholder')}
@@ -126,13 +152,15 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
             }
           }}
         />
-        <button type="button" onClick={() => void addManual()}>{t('catalog.addManual')}</button>
+        <button type="button" className="ghost" onClick={() => void addManual()}>{t('catalog.addManual')}</button>
       </div>
       {channel.models.length === 0 ? (
         <p className="empty">{t('catalog.empty')}</p>
+      ) : visibleModels.length === 0 ? (
+        <p className="empty">{t('catalog.noMatch')}</p>
       ) : (
         <div className="chips">
-          {channel.models.map((m) => (
+          {visibleModels.map((m) => (
             <label key={m.id} className={`chip ${m.selected ? 'selected' : ''} ${m.source}`}>
               <input
                 type="checkbox"

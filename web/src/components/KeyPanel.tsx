@@ -71,7 +71,7 @@ export default function KeyPanel({ channel, onError }: Props) {
       <div className="content-head">
         <h3>{t('key.title')}</h3>
         <div>
-          <button type="button" onClick={addRow}>
+          <button type="button" className="ghost" onClick={addRow}>
             {t('key.add')}
           </button>
         </div>
@@ -145,7 +145,7 @@ export default function KeyPanel({ channel, onError }: Props) {
         </table>
       )}
       <div className="actions">
-        <button type="button" disabled={saving} onClick={() => void save()}>
+        <button type="button" className="primary" disabled={saving} onClick={() => void save()}>
           {t('key.save')}
         </button>
       </div>

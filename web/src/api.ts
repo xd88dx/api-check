@@ -1,4 +1,4 @@
-import type { KeyInput, PublicChannel, TaskState } from './types';
+import type { KeyInput, PublicChannel, TaskState, TestDefaults } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -22,7 +22,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  listChannels(): Promise<{ channels: PublicChannel[] }> {
+  listChannels(): Promise<{ channels: PublicChannel[]; testDefaults: TestDefaults }> {
     return request('/channels');
   },
   createChannel(body: {
@@ -53,8 +53,8 @@ export const api = {
   ): Promise<{ channel: PublicChannel }> {
     return request(`/channels/${id}/models`, { method: 'PUT', body: JSON.stringify(body) });
   },
-  startProbe(id: string): Promise<{ task: TaskState }> {
-    return request(`/channels/${id}/probe`, { method: 'POST' });
+  startProbe(id: string, body: { model?: string } = {}): Promise<{ task: TaskState }> {
+    return request(`/channels/${id}/probe`, { method: 'POST', body: JSON.stringify(body) });
   },
   startCatalog(id: string): Promise<{ task: TaskState }> {
     return request(`/channels/${id}/catalog`, { method: 'POST' });
@@ -64,7 +64,13 @@ export const api = {
   },
   startTest(
     id: string,
-    body: { modelIds?: string[]; keyIds?: string[]; intervalMs?: number; timeoutMs?: number } = {},
+    body: {
+      modelIds?: string[];
+      keyIds?: string[];
+      intervalMs?: number;
+      timeoutMs?: number;
+      repeat?: number;
+    } = {},
   ): Promise<{ task: TaskState }> {
     return request(`/channels/${id}/test`, { method: 'POST', body: JSON.stringify(body) });
   },

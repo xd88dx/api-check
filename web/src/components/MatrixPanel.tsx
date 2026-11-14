@@ -5,9 +5,12 @@ import type { PublicChannel, CellResult, TaskState, Cls } from '../types';
 
 interface Props {
   channel: PublicChannel;
+  defaultRepeat: number; // M5：testDefaults.repeat
   onError: (msg: string) => void;
   onRefresh: () => Promise<void>;
 }
+
+type ConnectivityTone = 'ok' | 'warn' | 'muted' | 'bad';
 
 const CLS_COLORS: Record<Cls, string> = {
   ok: 'ok',
@@ -17,6 +20,19 @@ const CLS_COLORS: Record<Cls, string> = {
   timeout: 'muted',
   error: 'bad',
 };
+
+/** M5：连通率 = count(cls ∈ {ok, rate_limited}) / N */
+function connectivity(repeats: { cls: Cls }[]): { n: number; total: number; tone: ConnectivityTone } {
+  const total = repeats.length;
+  const connected = repeats.filter((r) => r.cls === 'ok' || r.cls === 'rate_limited').length;
+  const r = connected / total;
+  let tone: ConnectivityTone;
+  if (r >= 0.5) tone = 'ok';
+  else if (r > 0) tone = 'warn';
+  else if (repeats.every((x) => x.cls === 'timeout')) tone = 'muted';
+  else tone = 'bad';
+  return { n: connected, total, tone };
+}
 
 function formatLatency(ms: number, t: (k: string) => string): string {
   return ms < 1000 ? `${ms} ${t('matrix.ms')}` : `${(ms / 1000).toFixed(1)} ${t('matrix.sec')}`;
@@ -35,11 +51,12 @@ function formatTimestamp(iso: string, t: (k: string) => string): string {
   return `${y}-${mo}-${day} ${hh}:${mm}`;
 }
 
-export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
+export default function MatrixPanel({ channel, defaultRepeat, onError, onRefresh }: Props) {
   const { t } = useTranslation();
   const [task, setTask] = useState<TaskState | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [diffOpen, setDiffOpen] = useState(false);
+  const [repeat, setRepeat] = useState(defaultRepeat);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const poll = useCallback(async () => {
@@ -57,11 +74,26 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
     }
   }, [channel.id, onRefresh]);
 
+  // M5 G6 加固：挂载时若已有运行中任务恢复轮询（整页刷新、hash 持久化兜底）
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { task: tsk } = await api.getTask(channel.id);
+        if (cancelled) return;
+        if (tsk?.running) {
+          setTask(tsk);
+          timer.current = setTimeout(() => void poll(), 500);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
     return () => {
+      cancelled = true;
       if (timer.current) clearTimeout(timer.current);
     };
-  }, []);
+  }, [channel.id, poll]);
 
   const selectedModels = channel.models.filter((m) => m.selected);
   const enabledKeys = channel.keys.filter((k) => k.enabled);
@@ -71,7 +103,9 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
   const run = async () => {
     setLastError(null);
     try {
-      const { task: tsk } = await api.startTest(channel.id);
+      const r = Math.min(10, Math.max(1, Math.round(repeat) || 1));
+      setRepeat(r);
+      const { task: tsk } = await api.startTest(channel.id, { repeat: r });
       setTask(tsk);
       await poll();
     } catch (err) {
@@ -135,12 +169,13 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
         <div className="catalog-actions">
           <button
             type="button"
+            className="ghost"
             onClick={() => setDiffOpen((v) => !v)}
             disabled={running || selectedModels.length === 0}
           >
             {t('matrix.selectAvailable')}
           </button>
-          <button type="button" onClick={exportChannel} disabled={running}>
+          <button type="button" className="ghost" onClick={exportChannel} disabled={running}>
             {t('matrix.export')}
           </button>
           {running ? (
@@ -150,6 +185,7 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
           ) : (
             <button
               type="button"
+              className="primary"
               onClick={() => void run()}
               disabled={selectedModels.length === 0 || enabledKeys.length === 0}
             >
@@ -159,6 +195,11 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
         </div>
       </div>
 
+      {running && task && (
+        <p className="matrix-progress">
+          {t('matrix.progress', { n: progress.idx + 1, total: progress.total })}
+        </p>
+      )}
       {lastError && (
         <p className="error">
           {lastError === 'probe_first'
@@ -172,12 +213,20 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
       )}
       {selectedModels.length === 0 && <p className="empty">{t('matrix.noModel')}</p>}
       {enabledKeys.length === 0 && <p className="empty">{t('matrix.noKey')}</p>}
-
-      {running && task && (
-        <p className="matrix-progress">
-          {t('matrix.progress', { n: progress.idx + 1, total: progress.total })}
-        </p>
-      )}
+      <div className="matrix-controls">
+        <label className="matrix-repeat">
+          <span>{t('matrix.repeat')}</span>
+          <input
+            type="number"
+            min={1}
+            max={10}
+            value={repeat}
+            onChange={(e) => setRepeat(Number(e.target.value) || 1)}
+            disabled={running}
+          />
+          <span className="matrix-repeat-hint">{t('matrix.repeatHint')}</span>
+        </label>
+      </div>
 
       {diffOpen && (
         <div className="matrix-diff">
@@ -190,7 +239,7 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
             <p>{t('matrix.diffAllOk')}</p>
           )}
           <div className="actions">
-            <button type="button" disabled={diff.toUncheck.length === 0} onClick={() => void applyAvailable()}>
+            <button type="button" className="primary" disabled={diff.toUncheck.length === 0} onClick={() => void applyAvailable()}>
               {t('matrix.apply')}
             </button>
             <button type="button" className="link" onClick={() => setDiffOpen(false)}>
@@ -201,12 +250,13 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
       )}
 
       {selectedModels.length > 0 && enabledKeys.length > 0 && (
+        <div className="table-scroll">
         <table className="matrix-table">
           <thead>
             <tr>
               <th>{t('matrix.model')}</th>
               {enabledKeys.map((k) => (
-                <th key={k.id}>{k.label}</th>
+                <th key={k.id}>{t('matrix.keyCol', { label: k.label })}</th>
               ))}
             </tr>
           </thead>
@@ -217,15 +267,21 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
                 {enabledKeys.map((k) => {
                   const cell = results?.[m.id]?.[k.id];
                   const isCurrent = task?.current?.modelId === m.id && task?.current?.keyId === k.id;
+                  const repeats = cell?.repeats;
+                  const conn = repeats && repeats.length > 1 ? connectivity(repeats) : null;
+                  const color = conn ? conn.tone : cell ? CLS_COLORS[cell.cls] : '';
+                  const tooltip = repeats && repeats.length > 1
+                    ? repeats.map((r, i) => `#${i + 1} ${t(`matrix.cls.${r.cls}`)} · ${formatLatency(r.latencyMs, t)}${r.httpStatus !== null ? ` · ${r.httpStatus}` : ''}`).join('\n')
+                    : cell?.rawSnippet;
                   return (
                     <td
                       key={k.id}
-                      className={isCurrent ? 'matrix-cell-current' : ''}
-                      title={cell?.rawSnippet}
+                      className={`matrix-cell ${color ? `cell-${color}` : ''} ${isCurrent ? 'matrix-cell-current' : ''}`}
+                      title={tooltip}
                     >
                       {cell ? (
-                        <span className={`cls-badge cls-${CLS_COLORS[cell.cls]}`}>
-                          {t(`matrix.cls.${cell.cls}`)}
+                        <span className={`cls-badge cls-${conn ? conn.tone : CLS_COLORS[cell.cls]}`}>
+                          {conn ? `${conn.n}/${conn.total} · ${t(`matrix.cls.${cell.cls}`)}` : t(`matrix.cls.${cell.cls}`)}
                         </span>
                       ) : isCurrent ? (
                         <span className="matrix-running">…</span>
@@ -243,6 +299,7 @@ export default function MatrixPanel({ channel, onError, onRefresh }: Props) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
       {channel.state?.lastTestAt && <p className="catalog-ts">{t('matrix.lastTestAt')}{formatTimestamp(channel.state.lastTestAt, t)}</p>}
     </section>

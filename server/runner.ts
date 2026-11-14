@@ -5,7 +5,8 @@
 import { request } from './httpclient.js';
 import { classify, snippet } from './classify.js';
 import { buildProbeRequest, pickMainProtocol } from './probe.js';
-import type { Store, CellResult } from './store.js';
+import type { Store, CellResult, RepeatDetail } from './store.js';
+import { clampRepeat } from './store.js';
 import { finishTask, getTask, persistSnapshot } from './tasks.js';
 import { logger } from './logger.js';
 
@@ -14,6 +15,7 @@ export interface RunTestOpts {
   keyIds?: string[]; // 未指定取全部启用的 key
   intervalMs?: number; // 默认取 config.testDefaults
   timeoutMs?: number; // 默认取 config.testDefaults
+  repeat?: number; // M5：每格测试次数 1–10，默认取 config.testDefaults.repeat
 }
 
 function sleep(ms: number): Promise<void> {
@@ -32,6 +34,30 @@ export function selectAvailableModels(
   });
 }
 
+/** M5：主 cls = 最后一次非失败结果（失败=非 ok 且非 rate_limited）；全失败取最后一次 cls */
+function mainCls(repeats: RepeatDetail[]): CellResult['cls'] {
+  for (let i = repeats.length - 1; i >= 0; i--) {
+    const c = repeats[i]!.cls;
+    if (c === 'ok' || c === 'rate_limited') return c;
+  }
+  return repeats[repeats.length - 1]!.cls;
+}
+
+/** M5：由 repeat 明细聚合单元格结果。N=1 时主字段与旧版一致，repeats 保留明细。 */
+export function summarizeCell(repeats: RepeatDetail[]): CellResult {
+  const cls = mainCls(repeats);
+  // latencyMs 取最后一次（与主 cls 对齐展示）
+  const last = repeats[repeats.length - 1]!;
+  return {
+    cls,
+    latencyMs: last.latencyMs,
+    httpStatus: last.httpStatus,
+    rawSnippet: last.rawSnippet,
+    at: last.at,
+    repeats,
+  };
+}
+
 export async function runTest(store: Store, channelId: string, opts: RunTestOpts): Promise<void> {
   const task = getTask(channelId);
   if (!task) return;
@@ -42,6 +68,7 @@ export async function runTest(store: Store, channelId: string, opts: RunTestOpts
     const defaults = store.getConfig().testDefaults;
     const intervalMs = opts.intervalMs ?? defaults.intervalMs;
     const timeoutMs = opts.timeoutMs ?? defaults.timeoutMs;
+    const repeat = clampRepeat(opts.repeat ?? defaults.repeat);
 
     // 行：已选模型；列：已启用密钥
     const models = (opts.modelIds && opts.modelIds.length > 0
@@ -84,33 +111,46 @@ export async function runTest(store: Store, channelId: string, opts: RunTestOpts
           await finishTask(store, channelId);
           return;
         }
-        // 请求间强制间隔
-        if (!first) await sleep(intervalMs);
-        first = false;
 
-        task.current = { modelId: model.id, keyId: key.id, index };
-        task.currentIndex = index;
-        await persistSnapshot(store, channelId, task);
-
+        // M5：每格串行执行 repeat 次（全局串行与 intervalMs 不变）
+        const repeats: RepeatDetail[] = [];
         const spec = buildProbeRequest(proto, ch.baseUrl, key.key, model.id);
-        const startedAt = Date.now();
-        const res = await request({
-          url: spec.fetchUrl,
-          method: spec.method,
-          headers: spec.headers,
-          body: spec.body,
-          timeoutMs,
-          insecure: ch.insecure,
-        });
-        const latency = Date.now() - startedAt;
+        for (let n = 0; n < repeat; n++) {
+          if (task.stopped) break;
+          // 请求间强制间隔（含格与格之间、同格多次之间）
+          if (!first) await sleep(intervalMs);
+          first = false;
 
-        const cell: CellResult = {
-          cls: classify({ httpStatus: res.status, body: res.body, timedOut: res.timedOut, okMarkers: spec.okMarkers }),
-          latencyMs: latency,
-          httpStatus: res.status,
-          rawSnippet: snippet(res.body),
-          at: new Date().toISOString(),
-        };
+          task.current = { modelId: model.id, keyId: key.id, index };
+          task.currentIndex = index;
+          await persistSnapshot(store, channelId, task);
+
+          const startedAt = Date.now();
+          const res = await request({
+            url: spec.fetchUrl,
+            method: spec.method,
+            headers: spec.headers,
+            body: spec.body,
+            timeoutMs,
+            insecure: ch.insecure,
+          });
+          const latency = Date.now() - startedAt;
+          repeats.push({
+            cls: classify({ httpStatus: res.status, body: res.body, timedOut: res.timedOut, okMarkers: spec.okMarkers }),
+            latencyMs: latency,
+            httpStatus: res.status,
+            rawSnippet: snippet(res.body),
+            at: new Date().toISOString(),
+          });
+        }
+        if (repeats.length === 0) {
+          // stop 发生在本格开始前
+          logger.info(`test stopped channel=${channelId} at index=${index}/${total}`);
+          await finishTask(store, channelId);
+          return;
+        }
+
+        const cell = summarizeCell(repeats);
         if (!st.channels[channelId].results![model.id]) st.channels[channelId].results![model.id] = {};
         st.channels[channelId].results![model.id][key.id] = cell;
         // 逐格写 state 即刻落盘

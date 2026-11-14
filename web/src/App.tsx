@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from './api';
-import type { PublicChannel } from './types';
+import type { PublicChannel, TestDefaults } from './types';
 import ChannelList from './components/ChannelList';
 import ChannelEdit from './components/ChannelEdit';
 import LangSwitcher from './components/LangSwitcher';
@@ -9,17 +9,49 @@ import ConfirmDialog from './components/ConfirmDialog';
 
 type View = { mode: 'list' } | { mode: 'edit'; id: string | null };
 
+/** M5 §12.6：视图持久化到 location.hash（#/list、#/channel/<id>、#/channel/new） */
+function viewFromHash(): View {
+  try {
+    const m = /^#\/channel\/([^/]+)$/.exec(window.location.hash);
+    if (m) {
+      const id = decodeURIComponent(m[1]);
+      return { mode: 'edit', id: id === 'new' ? null : id };
+    }
+  } catch {
+    // hash 异常时回落列表
+  }
+  return { mode: 'list' };
+}
+
+function hashFromView(v: View): string {
+  if (v.mode === 'edit') {
+    return v.id ? `#/channel/${encodeURIComponent(v.id)}` : '#/channel/new';
+  }
+  return '#/list';
+}
+
 export default function App() {
   const { t } = useTranslation();
   const [channels, setChannels] = useState<PublicChannel[] | null>(null);
-  const [view, setView] = useState<View>({ mode: 'list' });
+  const [testDefaults, setTestDefaults] = useState<TestDefaults | null>(null);
+  const [view, setView] = useState<View>(viewFromHash);
   const [error, setError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PublicChannel | null>(null);
 
+  // 视图变化写入 hash（replaceState：不产生多余历史记录、不触发滚动）
+  useEffect(() => {
+    try {
+      window.history.replaceState(null, '', hashFromView(view));
+    } catch {
+      // 忽略（如 file:// 等受限环境）
+    }
+  }, [view]);
+
   const refresh = useCallback(async () => {
     try {
-      const { channels: list } = await api.listChannels();
+      const { channels: list, testDefaults: td } = await api.listChannels();
       setChannels(list);
+      setTestDefaults(td);
       setError(null);
     } catch {
       setError(t('error.load'));
@@ -65,9 +97,13 @@ export default function App() {
           onEdit={(id) => setView({ mode: 'edit', id })}
           onDelete={(ch) => setPendingDelete(ch)}
         />
+      ) : channels === null ? (
+        // hash 恢复编辑视图时等数据就绪再挂载编辑页，避免按「新建」初始化后不回填
+        <p className="loading-hint">{t('common.loading')}</p>
       ) : (
         <ChannelEdit
           channel={editingChannel}
+          defaultRepeat={testDefaults?.repeat ?? 1}
           onSaved={async (id) => {
             await refresh();
             setView({ mode: 'edit', id });

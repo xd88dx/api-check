@@ -21,7 +21,7 @@ export default function ChannelList({
     <main className="content">
       <div className="content-head">
         <h2>{t('channel.title')}</h2>
-        <button type="button" onClick={onAdd}>
+        <button type="button" className="primary" onClick={onAdd}>
           {t('channel.add')}
         </button>
       </div>

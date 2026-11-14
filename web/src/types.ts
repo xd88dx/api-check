@@ -27,12 +27,22 @@ export interface ChannelStatePublic {
   task?: TaskSnapshotPublic;
 }
 
+export interface RepeatDetail {
+  cls: Cls;
+  latencyMs: number;
+  httpStatus: number | null;
+  rawSnippet: string;
+  at: string;
+}
+
 export interface CellResult {
   cls: Cls;
   latencyMs: number;
   httpStatus: number | null;
   rawSnippet: string;
   at: string;
+  /** M5：每次明细（长度=repeat）。主字段=最后一次非失败结果（全失败取最后一次） */
+  repeats?: RepeatDetail[];
 }
 
 export interface TaskSnapshotPublic {
@@ -81,4 +91,11 @@ export interface KeyInput {
   key?: string;
   enabled: boolean;
   concurrency: number;
+}
+
+/** 全局测试默认值（M5：含 repeat） */
+export interface TestDefaults {
+  intervalMs: number;
+  timeoutMs: number;
+  repeat: number;
 }

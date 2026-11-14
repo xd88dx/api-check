@@ -78,8 +78,8 @@ export async function finishTask(store: Store, channelId: string, error?: string
   await persistSnapshot(store, channelId, task);
 }
 
-/** 启动探测任务（取第一个启用的 key；无 key 报错） */
-export async function runProbe(store: Store, channelId: string): Promise<void> {
+/** 启动探测任务（取第一个启用的 key；无 key 报错）。指定 model 时四协议全部用该模型（单候选），不走目录候选循环。 */
+export async function runProbe(store: Store, channelId: string, opts?: { model?: string }): Promise<void> {
   const task = tasks.get(channelId);
   if (!task) return;
   try {
@@ -87,14 +87,16 @@ export async function runProbe(store: Store, channelId: string): Promise<void> {
     if (!ch) { await finishTask(store, channelId, 'channel not found'); return; }
     const key = ch.keys.find((k) => k.enabled) ?? ch.keys[0];
     if (!key) { await finishTask(store, channelId, 'no key configured'); return; }
-    // 目录非空时探测按目录顺序最多取 3 个候选模型（坏模型自动换下一个，见 probe.ts）
-    const catalogModels = ch.models.slice(0, 3).map((m) => m.id);
+    const override = opts?.model?.trim();
+    const probeOpts = override
+      ? { model: override }
+      : (ch.models.length > 0 ? { model: ch.models.slice(0, 3).map((m) => m.id) } : {});
     const results = await probeAll({
       baseUrl: ch.baseUrl,
       apiKey: key.key,
       insecure: ch.insecure,
       timeoutMs: store.getConfig().testDefaults.timeoutMs,
-      ...(catalogModels.length > 0 ? { model: catalogModels } : {}),
+      ...probeOpts,
     });
     const state = store.getState();
     if (!state.channels[channelId]) state.channels[channelId] = {};

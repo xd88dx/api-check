@@ -9,6 +9,7 @@ import MatrixPanel from './MatrixPanel';
 
 interface Props {
   channel: PublicChannel | null; // null = 新建
+  defaultRepeat: number; // M5：testDefaults.repeat，矩阵测试次数预填
   onSaved: (id: string) => void | Promise<void>;
   onBack: () => void;
   onError: (msg: string) => void;
@@ -23,7 +24,7 @@ function firstIssueMessage(err: unknown): string | null {
   return null;
 }
 
-export default function ChannelEdit({ channel, onSaved, onBack, onError, onRefresh }: Props) {
+export default function ChannelEdit({ channel, defaultRepeat, onSaved, onBack, onError, onRefresh }: Props) {
   const { t } = useTranslation();
   const isNew = channel === null;
   const [name, setName] = useState(channel?.name ?? '');
@@ -110,7 +111,7 @@ export default function ChannelEdit({ channel, onSaved, onBack, onError, onRefre
           </label>
         )}
         <div className="actions">
-          <button type="submit" disabled={saving}>
+          <button type="submit" className="primary" disabled={saving}>
             {t('channel.save')}
           </button>
         </div>
@@ -118,10 +119,11 @@ export default function ChannelEdit({ channel, onSaved, onBack, onError, onRefre
       </form>
       {!isNew && channel && (
         <>
+          {/* M5 §12.4 顺序：密钥 → 目录 → 探测 → 矩阵 */}
           <KeyPanel channel={channel} onError={onError} />
-          <ProbePanel channel={channel} onError={onError} onRefresh={onRefresh} />
           <CatalogPanel channel={channel} onError={onError} onRefresh={onRefresh} />
-          <MatrixPanel channel={channel} onError={onError} onRefresh={onRefresh} />
+          <ProbePanel channel={channel} onError={onError} onRefresh={onRefresh} />
+          <MatrixPanel channel={channel} defaultRepeat={defaultRepeat} onError={onError} onRefresh={onRefresh} />
         </>
       )}
     </main>

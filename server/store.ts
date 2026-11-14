@@ -35,6 +35,7 @@ export interface Channel {
 export interface TestDefaults {
   intervalMs: number; // 默认 1000
   timeoutMs: number; // 默认 60000
+  repeat: number; // M5：每格测试次数 1–10，默认 1
 }
 
 export interface ChannelsConfig {
@@ -54,12 +55,22 @@ export interface ProbeResult {
   model?: string; // 探测实际命中的模型（目录非空时记录）
 }
 
+export interface RepeatDetail {
+  cls: Cls;
+  latencyMs: number;
+  httpStatus: number | null;
+  rawSnippet: string;
+  at: string;
+}
+
 export interface CellResult {
   cls: Cls;
   latencyMs: number;
   httpStatus: number | null;
   rawSnippet: string;
   at: string;
+  /** M5：每次明细（长度=repeat）。主字段=最后一次非失败结果（全失败取最后一次） */
+  repeats?: RepeatDetail[];
 }
 
 export interface TaskSnapshot {
@@ -84,10 +95,15 @@ export interface ChannelsState {
 
 // ---------- 默认值 ----------
 
+/** repeat 合法范围 1–10，越界/缺失回落默认 1 */
+export function clampRepeat(v: unknown): number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 10 ? v : 1;
+}
+
 export function defaultConfig(): ChannelsConfig {
   return {
     channels: [],
-    testDefaults: { intervalMs: 1000, timeoutMs: 60000 },
+    testDefaults: { intervalMs: 1000, timeoutMs: 60000, repeat: 1 },
   };
 }
 
@@ -141,11 +157,18 @@ export class Store {
     this.state = defaultState();
   }
 
-  /** 启动全量恢复；文件缺失/损坏时用默认值 */
+  /** 启动全量恢复；文件缺失/损坏时用默认值；旧版本字段缺失补默认值 */
   async init(): Promise<void> {
     await mkdir(this.dataDir, { recursive: true });
     await cleanTmpFiles(this.dataDir);
     this.config = await this.loadJson(this.configPath, defaultConfig());
+    // M5 迁移：旧配置缺 repeat 时补默认值
+    const td = this.config.testDefaults ?? defaultConfig().testDefaults;
+    this.config.testDefaults = {
+      intervalMs: td.intervalMs ?? 1000,
+      timeoutMs: td.timeoutMs ?? 60000,
+      repeat: clampRepeat(td.repeat),
+    };
     this.state = await this.loadJson(this.statePath, defaultState());
   }
 

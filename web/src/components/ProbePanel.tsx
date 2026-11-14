@@ -28,6 +28,7 @@ export default function ProbePanel({ channel, onError, onRefresh }: Props) {
   const { t } = useTranslation();
   const [task, setTask] = useState<TaskState | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [probeModel, setProbeModel] = useState('');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const poll = useCallback(async () => {
@@ -45,16 +46,33 @@ export default function ProbePanel({ channel, onError, onRefresh }: Props) {
     }
   }, [channel.id, onRefresh]);
 
+  // M5 G6 加固：挂载时若已有运行中任务（整页刷新场景）恢复轮询，进度不中断
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { task: tsk } = await api.getTask(channel.id);
+        if (cancelled) return;
+        if (tsk?.running) {
+          setTask(tsk);
+          timer.current = setTimeout(() => void poll(), 800);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
     return () => {
+      cancelled = true;
       if (timer.current) clearTimeout(timer.current);
     };
-  }, []);
+  }, [channel.id, poll]);
 
   const run = async () => {
     setLastError(null);
     try {
-      const { task: tsk } = await api.startProbe(channel.id);
+      // §12.5：填入模型 → 四协议全部用该模型；留空 → 目录候选循环现状
+      const model = probeModel.trim();
+      const { task: tsk } = await api.startProbe(channel.id, model ? { model } : {});
       setTask(tsk);
       await poll();
     } catch (err) {
@@ -73,7 +91,7 @@ export default function ProbePanel({ channel, onError, onRefresh }: Props) {
     <section className="probe-panel">
       <div className="content-head">
         <h3>{t('probe.title')}</h3>
-        <button type="button" disabled={running} onClick={() => void run()}>
+        <button type="button" className="primary" disabled={running} onClick={() => void run()}>
           {running ? t('probe.running') : t('probe.run')}
         </button>
       </div>
@@ -84,6 +102,15 @@ export default function ProbePanel({ channel, onError, onRefresh }: Props) {
             : `${t('probe.failed')}${lastError}`}
         </p>
       )}
+      <div className="probe-model-input">
+        <input
+          value={probeModel}
+          onChange={(e) => setProbeModel(e.target.value)}
+          placeholder={t('probe.modelPlaceholder')}
+          className="mono"
+        />
+        <span className="probe-model-hint">{t('probe.modelHint')}</span>
+      </div>
       {CLS_ORDER.map((proto) => {
         const r: PublicProbeResult | undefined = probe?.[proto];
         if (!r) return null;

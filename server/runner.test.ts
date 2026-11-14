@@ -4,8 +4,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store, type CellResult, type ProbeResult } from './store.js';
-import { runTest, selectAvailableModels } from './runner.js';
-import { acquireTask, stopAllTestTasks, getTask } from './tasks.js';
+import { runTest, selectAvailableModels, summarizeCell } from './runner.js';
+import { acquireTask, stopAllTestTasks, getTask, runProbe } from './tasks.js';
 import { startMock, type MockUpstream } from './mockupstream.js';
 
 const KEY = 'sk-test-0000abcdefgh';
@@ -253,5 +253,120 @@ describe('selectAvailableModels', () => {
       e: { k1: mk('unsupported') },
     };
     expect(selectAvailableModels(results, ['a', 'b', 'c', 'd', 'e', 'f'])).toEqual(['a', 'b']);
+  });
+});
+
+describe('M5 探测可指定模型（G5）', () => {
+  it('指定模型 → 探测请求体 model=该值，单候选不换候选循环', async () => {
+    const m = await start((_req, res, body) => {
+      let model = '';
+      try { model = (JSON.parse(body) as { model: string }).model; } catch { /* ignore */ }
+      if (model === 'user-model') {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end('MOCK_USER_MODEL_500');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(okBody());
+      }
+    });
+    // 目录非空（含 cat-model）：若误走目录候选循环会换候选，这里必须单候选
+    const { store, channelId } = await setupChannel(m, ['cat-model']);
+    acquireTask(channelId, 'probe', 4);
+    await runProbe(store, channelId, { model: 'user-model' });
+    const chatReqs = m.requests.filter((q) => q.url.endsWith('/chat/completions'));
+    expect(chatReqs).toHaveLength(1);
+    expect(JSON.parse(chatReqs[0]!.body ?? '{}')).toMatchObject({ model: 'user-model' });
+    const probeState = store.getState().channels['c1']!.probe!;
+    expect(probeState.openai.cls).toBe('error');
+    expect(probeState.openai.model).toBe('user-model');
+  });
+
+  it('留空 → 目录非空时按目录候选循环（现状回归不回退）', async () => {
+    const m = await start((_req, res, body) => {
+      let model = '';
+      try { model = (JSON.parse(body) as { model: string }).model; } catch { /* ignore */ }
+      if (model === 'cat-model') {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end('MOCK_CAT_MODEL_500');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(okBody());
+      }
+    });
+    const { store, channelId } = await setupChannel(m, ['cat-model', 'cat-model-2']);
+    acquireTask(channelId, 'probe', 4);
+    await runProbe(store, channelId);
+    const chatReqs = m.requests.filter((q) => q.url.endsWith('/chat/completions'));
+    expect(chatReqs.length).toBeGreaterThanOrEqual(2);
+    const probeState = store.getState().channels['c1']!.probe!;
+    expect(probeState.openai.cls).toBe('ok');
+    expect(probeState.openai.model).toBe('cat-model-2');
+  });
+});
+
+describe('M5 测试次数与连通率（G1）', () => {
+  it('repeat=3 → 每格请求数=N×模型×密钥，429 计入连通', async () => {
+    const m = await start((_req, res, body) => {
+      let model = '';
+      try { model = (JSON.parse(body) as { model: string }).model; } catch { /* ignore */ }
+      if (model === 'm-429') {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        res.end('{}');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(okBody());
+      }
+    });
+    const { store, channelId, keyIds } = await setupChannel(m, ['m-ok', 'm-429']);
+    acquireTask(channelId, 'test', 0);
+    await runTest(store, channelId, { intervalMs: 5, timeoutMs: 3000, repeat: 3 });
+    // 2 模型 × 2 密钥 × 3 次 = 12 请求
+    expect(m.requests).toHaveLength(12);
+    const results = store.getState().channels['c1']!.results!;
+    const okCell = results['m-ok']![keyIds[0]]!;
+    expect(okCell.repeats).toHaveLength(3);
+    expect(okCell.repeats!.every((r) => r.cls === 'ok')).toBe(true);
+    const limitedCell = results['m-429']![keyIds[0]]!;
+    expect(limitedCell.cls).toBe('rate_limited');
+    expect(limitedCell.repeats!.filter((r) => r.cls === 'rate_limited')).toHaveLength(3);
+  });
+
+  it('连通率色块规则：1 ok+2 503→warn；全 timeout→muted；全 error(503)→bad；主 cls=最后一次非失败', () => {
+    const mk = (cls: CellResult['cls'], status: number | null = 200) => ({
+      cls, latencyMs: 1, httpStatus: status, rawSnippet: '', at: '',
+    });
+    const tone = (r: CellResult): string => {
+      const ok = r.repeats!.filter((x) => x.cls === 'ok' || x.cls === 'rate_limited').length;
+      const total = r.repeats!.length;
+      const ratio = ok / total;
+      if (ratio >= 0.5) return 'ok';
+      if (ratio > 0) return 'warn';
+      if (r.repeats!.every((x) => x.cls === 'timeout')) return 'muted';
+      return 'bad';
+    };
+    const a = summarizeCell([mk('ok'), mk('error', 503), mk('error', 503)]);
+    expect(tone(a)).toBe('warn');
+    const b = summarizeCell([mk('timeout'), mk('timeout'), mk('timeout')]);
+    expect(tone(b)).toBe('muted');
+    const c = summarizeCell([mk('error', 503), mk('error', 503), mk('error', 503)]);
+    expect(tone(c)).toBe('bad');
+    // 主 cls：最后一次非失败结果；全失败取最后一次
+    expect(a.cls).toBe('ok');
+    expect(b.cls).toBe('timeout');
+    expect(c.cls).toBe('error');
+  });
+
+  it('N=1 形态与旧版一致：repeats 长度=1，主字段等于该次结果', async () => {
+    const m = await start((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(okBody());
+    });
+    const { store, channelId, keyIds } = await setupChannel(m, ['m1']);
+    acquireTask(channelId, 'test', 0);
+    await runTest(store, channelId, { intervalMs: 5, timeoutMs: 3000, repeat: 1 });
+    const cell = store.getState().channels['c1']!.results!['m1']![keyIds[0]]!;
+    expect(cell.repeats).toHaveLength(1);
+    expect(cell.cls).toBe('ok');
+    expect(cell.latencyMs).toBe(cell.repeats![0]!.latencyMs);
   });
 });

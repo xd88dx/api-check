@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from './store.js';
@@ -19,7 +19,21 @@ describe('Store', () => {
     const s = new Store(tmpDir);
     await s.init();
     expect(s.getConfig().channels).toEqual([]);
-    expect(s.getConfig().testDefaults).toEqual({ intervalMs: 1000, timeoutMs: 60000 });
+    expect(s.getConfig().testDefaults).toEqual({ intervalMs: 1000, timeoutMs: 60000, repeat: 1 });
+  });
+
+  it('M5 迁移：旧配置缺 repeat 时 init 补默认值 1', async () => {
+    const s = new Store(tmpDir);
+    await s.init();
+    await s.saveConfig();
+    // 模拟旧版本落盘的 config（无 repeat 字段）
+    const raw = await readFile(join(tmpDir, 'channels-config.json'), 'utf8');
+    const old = JSON.parse(raw) as { testDefaults: Record<string, unknown> };
+    delete old.testDefaults.repeat;
+    await writeFile(join(tmpDir, 'channels-config.json'), JSON.stringify(old), 'utf8');
+    const s2 = new Store(tmpDir);
+    await s2.init();
+    expect(s2.getConfig().testDefaults).toEqual({ intervalMs: 1000, timeoutMs: 60000, repeat: 1 });
   });
 
   it('保存后再 init 能完整恢复', async () => {
