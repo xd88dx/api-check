@@ -67,19 +67,28 @@
 /* M6 §13.3：手动添加组在左、过滤框在右，同一行 */
 .catalog-add {
   display: flex;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
   align-items: center;
   flex-wrap: wrap;
   margin: var(--sp-2) 0 var(--sp-3);
 }
+/* 手动添加：输入框+按钮连体成组（共享边框圆角），归属一目了然 */
 .catalog-add-manual {
   display: flex;
-  gap: var(--sp-2);
-  flex: 1 1 320px;
-  min-width: 0;
+  align-items: stretch;
 }
-.catalog-add-manual input { flex: 1; min-width: 160px; }
-.catalog-filter { flex: 1 1 260px; min-width: 180px; }
+.catalog-add-manual input {
+  width: 240px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.catalog-add-manual button {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: none;
+  white-space: nowrap;
+}
+.catalog-filter { width: 280px; margin-left: auto; }
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .chip {
