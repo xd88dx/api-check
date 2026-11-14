@@ -72,22 +72,13 @@
   flex-wrap: wrap;
   margin: var(--sp-2) 0 var(--sp-3);
 }
-/* 手动添加：输入框+按钮连体成组（共享边框圆角），归属一目了然 */
+/* 手动添加组在左（输入框+按钮各自完整圆角），过滤框在右 */
 .catalog-add-manual {
   display: flex;
   align-items: stretch;
+  gap: var(--sp-2);
 }
-.catalog-add-manual input {
-  width: 240px;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-.catalog-add-manual button {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  border-left: none;
-  white-space: nowrap;
-}
+.catalog-add-manual input { width: 300px; }
 .catalog-filter { width: 280px; margin-left: auto; }
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
