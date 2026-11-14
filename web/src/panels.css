@@ -64,8 +64,22 @@
 
 .catalog-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
 .catalog-ts { font-size: 12px; color: var(--muted); margin: var(--sp-1) 0; }
-.catalog-add { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin: var(--sp-2) 0 var(--sp-3); max-width: 760px; }
-.catalog-add input { flex: 1; min-width: 180px; }
+/* M6 §13.3：手动添加组在左、过滤框在右，同一行 */
+.catalog-add {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: center;
+  flex-wrap: wrap;
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+.catalog-add-manual {
+  display: flex;
+  gap: var(--sp-2);
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.catalog-add-manual input { flex: 1; min-width: 160px; }
+.catalog-filter { flex: 1 1 260px; min-width: 180px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .chip {
@@ -86,6 +100,28 @@
 .chip input { margin: 0; }
 .chip-name { font-family: var(--font-mono); }
 .chip-hint { color: var(--muted); font-size: 11px; }
+
+/* M6 §13.4：chip 复制图标与反馈 */
+.chip-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted);
+  line-height: 1;
+  border-radius: var(--radius-s);
+}
+.chip-copy:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); }
+.chip-copy:active { transform: none; }
+.chip-copied {
+  font-size: 11px;
+  color: var(--ok);
+  font-weight: 600;
+  white-space: nowrap;
+}
 .chip-x {
   border: none;
   background: transparent;
@@ -222,6 +258,6 @@
   .probe-row .probe-http { grid-area: http; text-align: left; }
   .probe-row .probe-latency { grid-area: latency; text-align: right; }
   .matrix-cell { min-width: 108px; }
-  .catalog-add, .probe-model-input { flex-direction: column; align-items: stretch; }
-  .catalog-add input, .probe-model-input input { min-width: 0; }
+  .catalog-add-manual, .catalog-add, .probe-model-input { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+  .catalog-add-manual input, .catalog-filter, .probe-model-input input { min-width: 0; }
 }

@@ -47,6 +47,10 @@ export const api = {
       body: JSON.stringify({ keys }),
     });
   },
+  // M6 §13.2：单 key 明文（全站唯一明文出口）
+  getKeyPlaintext(id: string, keyId: string): Promise<{ key: string }> {
+    return request(`/channels/${id}/keys/${keyId}/plaintext`);
+  },
   updateModels(
     id: string,
     body: { selected?: string[]; addManual?: string[]; removeManual?: string[] },

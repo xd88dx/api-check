@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
 import type { KeyInput, PublicChannel } from '../types';
+import { CopyIcon, EyeIcon, EyeOffIcon } from './icons';
 
 interface Row {
   id?: string;
@@ -20,9 +21,47 @@ export default function KeyPanel({ channel, onError }: Props) {
   const { t } = useTranslation();
   const [rows, setRows] = useState<Row[]>(channel.keys);
   const [saving, setSaving] = useState(false);
+  // M6 §13.2：揭示态缓存（keyId -> 明文）；复制成功反馈
+  const [revealedKeys, setRevealedKeys] = useState<Record<string, string>>({});
+  const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    };
+  }, []);
 
   const update = (idx: number, patch: Partial<Row>) => {
     setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  };
+
+  const toggleReveal = async (keyId: string) => {
+    if (revealedKeys[keyId] !== undefined) {
+      setRevealedKeys((m) => {
+        const { [keyId]: _drop, ...rest } = m;
+        return rest;
+      });
+      return;
+    }
+    try {
+      const { key } = await api.getKeyPlaintext(channel.id, keyId);
+      setRevealedKeys((m) => ({ ...m, [keyId]: key }));
+    } catch {
+      onError(t('key.revealFailed'));
+    }
+  };
+
+  const copyKey = async (keyId: string) => {
+    try {
+      const plain = revealedKeys[keyId] ?? (await api.getKeyPlaintext(channel.id, keyId)).key;
+      await navigator.clipboard.writeText(plain);
+      setCopiedKeyId(keyId);
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopiedKeyId(null), 1500);
+    } catch {
+      onError(t('key.copyFailed'));
+    }
   };
 
   const addRow = () => {
@@ -42,18 +81,23 @@ export default function KeyPanel({ channel, onError }: Props) {
     }
     setSaving(true);
     try {
-      const keys: KeyInput[] = rows.map((r) => ({
-        id: r.id,
-        label: r.label,
-        enabled: r.enabled,
-        concurrency: r.concurrency,
-        ...(r.key ? { key: r.key } : {}),
-      }));
+      const keys: KeyInput[] = rows.map((r) => {
+        // 揭示态保存以缓存的明文为准（掩码态保持既有行为：r.key 非空即提交）
+        const kv = r.id && revealedKeys[r.id] !== undefined ? revealedKeys[r.id]! : r.key;
+        return {
+          id: r.id,
+          label: r.label,
+          enabled: r.enabled,
+          concurrency: r.concurrency,
+          ...(kv ? { key: kv } : {}),
+        };
+      });
       await api.replaceKeys(channel.id, keys);
       const { channel: fresh } = await api.listChannels().then((res) => ({
         channel: res.channels.find((c) => c.id === channel.id)!,
       }));
       setRows(fresh.keys);
+      setRevealedKeys({});
     } catch (err) {
       if (err instanceof ApiError && err.body.issues?.length) {
         const i = err.body.issues[0];
@@ -100,17 +144,50 @@ export default function KeyPanel({ channel, onError }: Props) {
                   />
                 </td>
                 <td>
-                  <input
-                    value={r.key}
-                    onChange={(e) => update(idx, { key: e.target.value })}
-                    placeholder={
-                      r.id
-                        ? `${r.key === '' ? t('key.keepHint') : ''}`
-                        : 'sk-...'
-                    }
-                    className="mono"
-                    autoComplete="off"
-                  />
+                  <div className="key-cell">
+                    <input
+                      value={r.id && revealedKeys[r.id] !== undefined ? revealedKeys[r.id]! : r.key}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        update(idx, { key: v });
+                        if (r.id && revealedKeys[r.id] !== undefined) {
+                          setRevealedKeys((m) => ({ ...m, [r.id!]: v }));
+                        }
+                      }}
+                      placeholder={
+                        r.id
+                          ? `${r.key === '' ? t('key.keepHint') : ''}`
+                          : 'sk-...'
+                      }
+                      className="mono"
+                      autoComplete="off"
+                    />
+                    {r.id && (
+                      <span className="key-cell-tools">
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={revealedKeys[r.id] !== undefined ? t('key.hide') : t('key.reveal')}
+                          aria-label={revealedKeys[r.id] !== undefined ? t('key.hide') : t('key.reveal')}
+                          onClick={() => void toggleReveal(r.id!)}
+                        >
+                          {revealedKeys[r.id] !== undefined ? <EyeOffIcon /> : <EyeIcon />}
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={t('key.copy')}
+                          aria-label={t('key.copy')}
+                          onClick={() => void copyKey(r.id!)}
+                        >
+                          <CopyIcon />
+                        </button>
+                        {copiedKeyId === r.id && (
+                          <span className="copy-feedback">{t('common.copied')}</span>
+                        )}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td>
                   <input

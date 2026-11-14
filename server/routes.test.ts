@@ -1,0 +1,112 @@
+// routes.ts HTTP 层测试（M6）：plaintext 端点为全站唯一明文出口；intervalMs 持久化
+import { describe, it, expect, afterAll, afterEach } from 'vitest';
+import express from 'express';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Store, type ProbeResult } from './store.js';
+import { createRouter, errorHandler } from './routes.js';
+import { stopAllTestTasks } from './tasks.js';
+import { mask } from './mask.js';
+
+const KEY = 'sk-test-0000abcdefgh';
+let server: ReturnType<express.Express['listen']> | null = null;
+let baseUrl = '';
+const dirs: string[] = [];
+const stores: Store[] = [];
+
+afterAll(async () => {
+  await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })));
+});
+afterEach(async () => {
+  stopAllTestTasks();
+  if (server) {
+    await new Promise<void>((resolve) => server!.close(() => resolve()));
+    server = null;
+  }
+});
+
+async function setup(): Promise<{ store: Store; channelId: string; keyId: string }> {
+  const dataDir = await mkdtemp(join(tmpdir(), 'api-check-routes-'));
+  dirs.push(dataDir);
+  const store = new Store(dataDir);
+  await store.init();
+  const now = new Date().toISOString();
+  store.getConfig().channels.push({
+    id: 'c1',
+    name: 'mock',
+    // 立即拒绝的本地地址：让 runTest 的请求快速失败，避免后台任务跨用例挂起
+    baseUrl: 'http://127.0.0.1:9/v1',
+    insecure: false,
+    enabled: true,
+    createdAt: now,
+    keys: [
+      { id: 'k1', label: 'key1', key: KEY, enabled: true, concurrency: 1, createdAt: now },
+    ],
+    models: [{ id: 'm1', selected: true, source: 'catalog' }],
+  });
+  const probe: Record<string, ProbeResult> = {
+    openai: { url: 'https://example.com/v1/chat/completions', cls: 'ok', latencyMs: 1, httpStatus: 200, rawSnippet: '', at: now },
+  };
+  store.getState().channels['c1'] = { probe };
+  await store.saveConfig();
+  await store.saveState();
+  stores.push(store);
+
+  const app = express();
+  app.use('/api', createRouter(store));
+  app.use(errorHandler);
+  await new Promise<void>((resolve) => {
+    server = app.listen(0, () => resolve());
+  });
+  const addr = server!.address();
+  const port = typeof addr === 'object' && addr ? addr.port : 0;
+  baseUrl = `http://127.0.0.1:${port}/api`;
+  return { store, channelId: 'c1', keyId: 'k1' };
+}
+
+describe('M6 plaintext 端点（H2/H6）', () => {
+  it('GET /keys/:keyId/plaintext 返回明文（全站唯一豁免出口）', async () => {
+    await setup();
+    const res = await fetch(`${baseUrl}/channels/c1/keys/k1/plaintext`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { key: string };
+    expect(body.key).toBe(KEY);
+  });
+
+  it('其余出口仍掩码：GET /channels 的 key 为 mask 形态，不出现明文', async () => {
+    await setup();
+    const res = await fetch(`${baseUrl}/channels`);
+    const body = (await res.json()) as { channels: { keys: { key: string }[] }[] };
+    expect(body.channels[0]!.keys[0]!.key).toBe(mask(KEY));
+    expect(JSON.stringify(body)).not.toContain(KEY);
+  });
+
+  it('key 不存在 → 404', async () => {
+    await setup();
+    const res = await fetch(`${baseUrl}/channels/c1/keys/nope/plaintext`);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('M6 间隔持久化（H5/H6）', () => {
+  it('POST /test 显式 intervalMs → 写回 testDefaults.intervalMs', async () => {
+    const { store } = await setup();
+    const res = await fetch(`${baseUrl}/channels/c1/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // repeat=1：单格单请求，intervalMs 不触发格间 sleep；请求立即失败、任务毫秒级收尾
+      body: JSON.stringify({ intervalMs: 12000, repeat: 1 }),
+    });
+    expect(res.status).toBe(202);
+    expect(store.getConfig().testDefaults.intervalMs).toBe(12000);
+    expect(store.getConfig().testDefaults.repeat).toBe(1);
+    // 等后台任务收尾，避免测试清理目录后任务仍在写盘
+    for (let i = 0; i < 20; i++) {
+      const t = await fetch(`${baseUrl}/channels/c1/task`);
+      const { task } = (await t.json()) as { task: { running: boolean } | null };
+      if (!task?.running) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  });
+});

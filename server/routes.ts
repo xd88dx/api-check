@@ -270,6 +270,14 @@ export function createRouter(store: Store): Router {
     res.json({ channel: toPublicChannel(ch) });
   });
 
+  // M6 §13.2：单 key 明文（全站唯一明文出口，仅本地工具用途；不加缓存头）
+  r.get('/channels/:id/keys/:keyId/plaintext', (req, res) => {
+    const ch = findChannel(store, req.params.id);
+    const k = ch.keys.find((x) => x.id === req.params.keyId);
+    if (!k) throw new HttpError(404, 'key not found');
+    res.json({ key: k.key });
+  });
+
   // 勾选集与手动添加模型
   r.put('/channels/:id/models', (req, res) => {
     const ch = findChannel(store, req.params.id);
@@ -345,7 +353,7 @@ export function createRouter(store: Store): Router {
 
   // ---- M3：矩阵测试 ----
 
-  // 启动矩阵（后台任务；body.repeat 显式给出时持久化至 testDefaults.repeat）
+  // 启动矩阵（后台任务；body.repeat / body.intervalMs 显式给出时持久化至 testDefaults）
   r.post('/channels/:id/test', (req, res) => {
     const ch = findChannel(store, req.params.id);
     const body = testStartSchema.parse(req.body ?? {});
@@ -355,8 +363,13 @@ export function createRouter(store: Store): Router {
     }
     const task = acquireTask(ch.id, 'test', 0);
     if (!task) throw new HttpError(409, 'task_already_running');
+    // M6 §13.5：显式给出的 intervalMs 持久化至 testDefaults（与 repeat 同模式）
     if (body.repeat !== undefined) {
       store.getConfig().testDefaults.repeat = body.repeat;
+      void store.saveConfig();
+    }
+    if (body.intervalMs !== undefined) {
+      store.getConfig().testDefaults.intervalMs = body.intervalMs;
       void store.saveConfig();
     }
     void runTest(store, ch.id, body);

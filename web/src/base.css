@@ -195,7 +195,7 @@ input::placeholder { color: #8b949e; }
   padding: var(--sp-4);
 }
 
-.form { display: flex; flex-direction: column; gap: var(--sp-3); max-width: 640px; }
+.form { display: flex; flex-direction: column; gap: var(--sp-3); width: 100%; }
 .form label {
   display: flex;
   flex-direction: column;
@@ -286,4 +286,40 @@ input::placeholder { color: #8b949e; }
 .key-table input { width: 100%; }
 .key-table input[type='checkbox'] { width: auto; }
 .key-table input[type='number'] { width: 76px; }
+
+/* ---------- M6 §13.2：密钥单元格工具（眼睛/复制） ---------- */
+
+.key-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.key-cell > input { flex: 1; min-width: 0; }
+.key-cell-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border-radius: var(--radius-s);
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+.icon-btn:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.icon-btn:active { transform: none; }
+
+.copy-feedback {
+  font-size: 11px;
+  color: var(--ok);
+  font-weight: 600;
+  white-space: nowrap;
+}
 

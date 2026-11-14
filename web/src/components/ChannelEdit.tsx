@@ -10,6 +10,7 @@ import MatrixPanel from './MatrixPanel';
 interface Props {
   channel: PublicChannel | null; // null = 新建
   defaultRepeat: number; // M5：testDefaults.repeat，矩阵测试次数预填
+  defaultIntervalMs: number; // M6 §13.5：testDefaults.intervalMs，矩阵间隔预填
   onSaved: (id: string) => void | Promise<void>;
   onBack: () => void;
   onError: (msg: string) => void;
@@ -24,7 +25,7 @@ function firstIssueMessage(err: unknown): string | null {
   return null;
 }
 
-export default function ChannelEdit({ channel, defaultRepeat, onSaved, onBack, onError, onRefresh }: Props) {
+export default function ChannelEdit({ channel, defaultRepeat, defaultIntervalMs, onSaved, onBack, onError, onRefresh }: Props) {
   const { t } = useTranslation();
   const isNew = channel === null;
   const [name, setName] = useState(channel?.name ?? '');
@@ -123,7 +124,13 @@ export default function ChannelEdit({ channel, defaultRepeat, onSaved, onBack, o
           <KeyPanel channel={channel} onError={onError} />
           <CatalogPanel channel={channel} onError={onError} onRefresh={onRefresh} />
           <ProbePanel channel={channel} onError={onError} onRefresh={onRefresh} />
-          <MatrixPanel channel={channel} defaultRepeat={defaultRepeat} onError={onError} onRefresh={onRefresh} />
+          <MatrixPanel
+            channel={channel}
+            defaultRepeat={defaultRepeat}
+            defaultIntervalMs={defaultIntervalMs}
+            onError={onError}
+            onRefresh={onRefresh}
+          />
         </>
       )}
     </main>

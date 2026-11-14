@@ -6,6 +6,7 @@ import type { PublicChannel, CellResult, TaskState, Cls } from '../types';
 interface Props {
   channel: PublicChannel;
   defaultRepeat: number; // M5：testDefaults.repeat
+  defaultIntervalMs: number; // M6 §13.5：testDefaults.intervalMs
   onError: (msg: string) => void;
   onRefresh: () => Promise<void>;
 }
@@ -51,12 +52,13 @@ function formatTimestamp(iso: string, t: (k: string) => string): string {
   return `${y}-${mo}-${day} ${hh}:${mm}`;
 }
 
-export default function MatrixPanel({ channel, defaultRepeat, onError, onRefresh }: Props) {
+export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs, onError, onRefresh }: Props) {
   const { t } = useTranslation();
   const [task, setTask] = useState<TaskState | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
   const [diffOpen, setDiffOpen] = useState(false);
   const [repeat, setRepeat] = useState(defaultRepeat);
+  const [intervalMs, setIntervalMs] = useState(defaultIntervalMs);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const poll = useCallback(async () => {
@@ -104,8 +106,10 @@ export default function MatrixPanel({ channel, defaultRepeat, onError, onRefresh
     setLastError(null);
     try {
       const r = Math.min(10, Math.max(1, Math.round(repeat) || 1));
+      const iv = Math.max(0, Math.round(intervalMs) || 0);
       setRepeat(r);
-      const { task: tsk } = await api.startTest(channel.id, { repeat: r });
+      setIntervalMs(iv);
+      const { task: tsk } = await api.startTest(channel.id, { repeat: r, intervalMs: iv });
       setTask(tsk);
       await poll();
     } catch (err) {
@@ -225,6 +229,18 @@ export default function MatrixPanel({ channel, defaultRepeat, onError, onRefresh
             disabled={running}
           />
           <span className="matrix-repeat-hint">{t('matrix.repeatHint')}</span>
+        </label>
+        <label className="matrix-repeat">
+          <span>{t('matrix.interval')}</span>
+          <input
+            type="number"
+            min={0}
+            step={100}
+            value={intervalMs}
+            onChange={(e) => setIntervalMs(Math.max(0, Number(e.target.value) || 0))}
+            disabled={running}
+          />
+          <span className="matrix-repeat-hint">{t('matrix.intervalHint')}</span>
         </label>
       </div>
 

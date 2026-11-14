@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
 import type { PublicChannel, TaskState } from '../types';
+import { CopyIcon } from './icons';
 
 interface Props {
   channel: PublicChannel;
@@ -26,7 +27,27 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
   const [lastError, setLastError] = useState<string | null>(null);
   const [manualName, setManualName] = useState('');
   const [filter, setFilter] = useState(''); // §12.3：客户端关键字过滤（大小写不敏感子串）
+  // M6 §13.4：chip 复制反馈（自动消失）
+  const [copiedModelId, setCopiedModelId] = useState<string | null>(null);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    };
+  }, []);
+
+  const copyModelId = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopiedModelId(id);
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopiedModelId(null), 1500);
+    } catch {
+      onError(t('catalog.copyFailed'));
+    }
+  };
 
   const poll = useCallback(async () => {
     try {
@@ -135,24 +156,28 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
       {catalogAt && (
         <p className="catalog-ts">{t('catalog.timestamp')}{formatAgo(catalogAt, t)}</p>
       )}
+      {/* M6 §13.3：手动添加组在左、过滤框在右，同一行 */}
       <div className="catalog-add">
+        <div className="catalog-add-manual">
+          <input
+            value={manualName}
+            onChange={(e) => setManualName(e.target.value)}
+            placeholder={t('catalog.addManualPlaceholder')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void addManual();
+              }
+            }}
+          />
+          <button type="button" className="ghost" onClick={() => void addManual()}>{t('catalog.addManual')}</button>
+        </div>
         <input
+          className="catalog-filter"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder={t('catalog.filterPlaceholder')}
         />
-        <input
-          value={manualName}
-          onChange={(e) => setManualName(e.target.value)}
-          placeholder={t('catalog.addManualPlaceholder')}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              void addManual();
-            }
-          }}
-        />
-        <button type="button" className="ghost" onClick={() => void addManual()}>{t('catalog.addManual')}</button>
       </div>
       {channel.models.length === 0 ? (
         <p className="empty">{t('catalog.empty')}</p>
@@ -168,6 +193,20 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
                 onChange={(e) => void toggle(m.id, e.target.checked)}
               />
               <span className="chip-name">{m.id}</span>
+              <button
+                type="button"
+                className="chip-copy"
+                title={t('catalog.copyModel')}
+                aria-label={t('catalog.copyModel')}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void copyModelId(m.id);
+                }}
+              >
+                <CopyIcon size={12} />
+              </button>
+              {copiedModelId === m.id && <span className="chip-copied">{t('common.copied')}</span>}
               {m.contextHint && <span className="chip-hint">{m.contextHint}</span>}
               {m.source === 'manual' && (
                 <button type="button" className="chip-x" onClick={() => void removeManual(m.id)}>×</button>

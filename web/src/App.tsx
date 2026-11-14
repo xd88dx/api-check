@@ -104,6 +104,7 @@ export default function App() {
         <ChannelEdit
           channel={editingChannel}
           defaultRepeat={testDefaults?.repeat ?? 1}
+          defaultIntervalMs={testDefaults?.intervalMs ?? 1000}
           onSaved={async (id) => {
             await refresh();
             setView({ mode: 'edit', id });
