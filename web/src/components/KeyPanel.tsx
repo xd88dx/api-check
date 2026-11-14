@@ -1,15 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
-import type { KeyInput, PublicChannel } from '../types';
+import type { KeyInput, PublicChannel, PublicKey } from '../types';
 import { CopyIcon, EyeIcon, EyeOffIcon } from './icons';
 
 interface Row {
   id?: string;
   label: string;
-  key: string; // 已有密钥留空 = 不改；新增行必填
+  key: string; // 编辑缓冲：已有行空串起步（掩码绝不回填），留空 = 不修改
+  maskHint: string; // 已有行的掩码形态，仅用于 placeholder 展示
   enabled: boolean;
   concurrency: number;
+}
+
+/** 由 API 行构造编辑行：key 编辑框一律空串起步，掩码只进 placeholder，绝不回填提交 */
+function toRows(keys: PublicKey[]): Row[] {
+  return keys.map((k) => ({
+    id: k.id,
+    label: k.label,
+    key: '',
+    maskHint: k.key,
+    enabled: k.enabled,
+    concurrency: k.concurrency,
+  }));
 }
 
 interface Props {
@@ -19,7 +32,7 @@ interface Props {
 
 export default function KeyPanel({ channel, onError }: Props) {
   const { t } = useTranslation();
-  const [rows, setRows] = useState<Row[]>(channel.keys);
+  const [rows, setRows] = useState<Row[]>(toRows(channel.keys));
   const [saving, setSaving] = useState(false);
   // M6 §13.2：揭示态缓存（keyId -> 明文）；复制成功反馈
   const [revealedKeys, setRevealedKeys] = useState<Record<string, string>>({});
@@ -65,7 +78,7 @@ export default function KeyPanel({ channel, onError }: Props) {
   };
 
   const addRow = () => {
-    setRows((rs) => [...rs, { label: '', key: '', enabled: true, concurrency: 1 }]);
+    setRows((rs) => [...rs, { label: '', key: '', maskHint: '', enabled: true, concurrency: 1 }]);
   };
 
   const removeRow = (idx: number) => {
@@ -82,7 +95,7 @@ export default function KeyPanel({ channel, onError }: Props) {
     setSaving(true);
     try {
       const keys: KeyInput[] = rows.map((r) => {
-        // 揭示态保存以缓存的明文为准（掩码态保持既有行为：r.key 非空即提交）
+        // 揭示态保存以缓存的明文为准；掩码态编辑框为空 → 不携带 key 字段（后端视为未修改）
         const kv = r.id && revealedKeys[r.id] !== undefined ? revealedKeys[r.id]! : r.key;
         return {
           id: r.id,
@@ -96,7 +109,7 @@ export default function KeyPanel({ channel, onError }: Props) {
       const { channel: fresh } = await api.listChannels().then((res) => ({
         channel: res.channels.find((c) => c.id === channel.id)!,
       }));
-      setRows(fresh.keys);
+      setRows(toRows(fresh.keys));
       setRevealedKeys({});
     } catch (err) {
       if (err instanceof ApiError && err.body.issues?.length) {
@@ -156,7 +169,7 @@ export default function KeyPanel({ channel, onError }: Props) {
                       }}
                       placeholder={
                         r.id
-                          ? `${r.key === '' ? t('key.keepHint') : ''}`
+                          ? `${r.maskHint || ''}${r.maskHint ? ' · ' : ''}${t('key.keepHint')}`
                           : 'sk-...'
                       }
                       className="mono"

@@ -65,6 +65,63 @@ async function setup(): Promise<{ store: Store; channelId: string; keyId: string
   return { store, channelId: 'c1', keyId: 'k1' };
 }
 
+describe('密钥编辑掩码防线（防掩码回填覆盖真 key）', () => {
+  it('PUT 存量行带掩码形态 key → 原 key 不变', async () => {
+    await setup();
+    const res = await fetch(`${baseUrl}/channels/c1/keys`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: [{ id: 'k1', label: 'key1', key: mask(KEY), enabled: true, concurrency: 1 }] }),
+    });
+    expect(res.status).toBe(200);
+    const ch = await fetch(`${baseUrl}/channels`).then((r) => r.json()) as { channels: { keys: { key: string }[] }[] };
+    expect(ch.channels[0]!.keys[0]!.key).toBe(mask(KEY)); // 掩码仍在 = 真 key 未被覆盖
+    const plain = await fetch(`${baseUrl}/channels/c1/keys/k1/plaintext`).then((r) => r.json()) as { key: string };
+    expect(plain.key).toBe(KEY);
+  });
+
+  it('PUT 存量行带明文 key → 正常更新', async () => {
+    await setup();
+    const newKey = 'sk-updated-0000abcdefgh';
+    const res = await fetch(`${baseUrl}/channels/c1/keys`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: [{ id: 'k1', label: 'key1', key: newKey, enabled: true, concurrency: 1 }] }),
+    });
+    expect(res.status).toBe(200);
+    const plain = await fetch(`${baseUrl}/channels/c1/keys/k1/plaintext`).then((r) => r.json()) as { key: string };
+    expect(plain.key).toBe(newKey);
+  });
+
+  it('PUT 新行带掩码形态 key → 400', async () => {
+    await setup();
+    const res = await fetch(`${baseUrl}/channels/c1/keys`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: [{ label: 'new', key: 'sk-84…GVEQJ', enabled: true, concurrency: 1 }] }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('masked');
+  });
+
+  it('PUT 新行带明文 key → 正常新增', async () => {
+    await setup();
+    const res = await fetch(`${baseUrl}/channels/c1/keys`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keys: [
+        { id: 'k1', label: 'key1', enabled: true, concurrency: 1 },
+        { label: 'new', key: 'sk-new-000000000000', enabled: true, concurrency: 1 },
+      ] }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json() as { channel: { keys: { id: string; label: string }[] } };
+    expect(body.channel.keys).toHaveLength(2);
+    expect(body.channel.keys.find((k) => k.label === 'new')).toBeTruthy();
+  });
+});
+
 describe('M6 plaintext 端点（H2/H6）', () => {
   it('GET /keys/:keyId/plaintext 返回明文（全站唯一豁免出口）', async () => {
     await setup();

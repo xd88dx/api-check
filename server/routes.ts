@@ -165,7 +165,12 @@ function channelStatePublic(store: Store, id: string) {
   };
 }
 
-/** 整表替换密钥：有 id 且已存在→更新（key 留空不改）；无 id→新增；缺席→删除 */
+/** 掩码形态判定：含 U+2026 省略号，或与既有 key 的 mask() 输出一致（防掩码回填覆盖真 key） */
+function isMaskShaped(key: string, existingKey?: string): boolean {
+  return key.includes('…') || (existingKey !== undefined && key === mask(existingKey));
+}
+
+/** 整表替换密钥：有 id 且已存在→更新（key 留空/掩码形态 = 不改）；无 id→新增；缺席→删除 */
 function replaceKeys(ch: Channel, entries: z.infer<typeof keyEntrySchema>[]): ChannelKey[] {
   const now = new Date().toISOString();
   const result: ChannelKey[] = [];
@@ -175,18 +180,27 @@ function replaceKeys(ch: Channel, entries: z.infer<typeof keyEntrySchema>[]): Ch
       const existing = ch.keys.find((k) => k.id === e.id);
       if (existing) {
         seen.add(existing.id);
+        // 提交掩码形态 key（含前端掩码回填污染）→ 视为未修改，保留原 key
+        const keepKey = !e.key || isMaskShaped(e.key, existing.key);
         result.push({
           ...existing,
           label: e.label,
           enabled: e.enabled,
           concurrency: e.concurrency,
-          ...(e.key ? { key: e.key } : {}),
+          ...(!keepKey ? { key: e.key! } : {}),
         });
         continue;
       }
     }
     if (!e.key) {
       throw new HttpError(400, `key is required for new entry "${e.label}"`);
+    }
+    // 新行提交掩码形态 key 必是误输入（掩码只应出现在展示侧）→ 拒绝
+    if (isMaskShaped(e.key)) {
+      throw new HttpError(
+        400,
+        `key for new entry "${e.label}" looks like a masked value; paste the plaintext key`,
+      );
     }
     const created: ChannelKey = {
       id: randomUUID(),
