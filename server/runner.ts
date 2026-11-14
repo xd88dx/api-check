@@ -15,7 +15,7 @@ export interface RunTestOpts {
   keyIds?: string[]; // 未指定取全部启用的 key
   intervalMs?: number; // 默认取 config.testDefaults
   timeoutMs?: number; // 默认取 config.testDefaults
-  repeat?: number; // M5：每格测试次数 1–10，默认取 config.testDefaults.repeat
+  repeat?: number; // M7：失败重试次数（总尝试上限）1–10，默认取 config.testDefaults.repeat
 }
 
 function sleep(ms: number): Promise<void> {
@@ -34,28 +34,11 @@ export function selectAvailableModels(
   });
 }
 
-/** M5：主 cls = 最后一次非失败结果（失败=非 ok 且非 rate_limited）；全失败取最后一次 cls */
-function mainCls(repeats: RepeatDetail[]): CellResult['cls'] {
-  for (let i = repeats.length - 1; i >= 0; i--) {
-    const c = repeats[i]!.cls;
-    if (c === 'ok' || c === 'rate_limited') return c;
-  }
-  return repeats[repeats.length - 1]!.cls;
-}
-
-/** M5：由 repeat 明细聚合单元格结果。N=1 时主字段与旧版一致，repeats 保留明细。 */
+/** M7 §14：主字段 = 最后一次尝试。成功（ok/rate_limited）即停 → 成功那次必为最后一次；
+ * 全败 → 最后一次失败结果（SPEC §14.3）。N=1 时与旧版单次完全一致。 */
 export function summarizeCell(repeats: RepeatDetail[]): CellResult {
-  const cls = mainCls(repeats);
-  // latencyMs 取最后一次（与主 cls 对齐展示）
   const last = repeats[repeats.length - 1]!;
-  return {
-    cls,
-    latencyMs: last.latencyMs,
-    httpStatus: last.httpStatus,
-    rawSnippet: last.rawSnippet,
-    at: last.at,
-    repeats,
-  };
+  return { ...last, repeats };
 }
 
 export async function runTest(store: Store, channelId: string, opts: RunTestOpts): Promise<void> {
@@ -112,12 +95,13 @@ export async function runTest(store: Store, channelId: string, opts: RunTestOpts
           return;
         }
 
-        // M5：每格串行执行 repeat 次（全局串行与 intervalMs 不变）
+        // M7 §14：失败重试语义——先发 1 次，cls ∈ {ok, rate_limited} 即定案；
+        // 其余 cls 自动重试，最多共 repeat 次尝试（N=1 等价旧版单次），中途成功即停
         const repeats: RepeatDetail[] = [];
         const spec = buildProbeRequest(proto, ch.baseUrl, key.key, model.id);
         for (let n = 0; n < repeat; n++) {
           if (task.stopped) break;
-          // 请求间强制间隔（含格与格之间、同格多次之间）
+          // 请求间强制间隔（含格与格之间、重试请求之间）
           if (!first) await sleep(intervalMs);
           first = false;
 
@@ -135,13 +119,15 @@ export async function runTest(store: Store, channelId: string, opts: RunTestOpts
             insecure: ch.insecure,
           });
           const latency = Date.now() - startedAt;
-          repeats.push({
+          const detail: RepeatDetail = {
             cls: classify({ httpStatus: res.status, body: res.body, timedOut: res.timedOut, okMarkers: spec.okMarkers }),
             latencyMs: latency,
             httpStatus: res.status,
             rawSnippet: snippet(res.body),
             at: new Date().toISOString(),
-          });
+          };
+          repeats.push(detail);
+          if (detail.cls === 'ok' || detail.cls === 'rate_limited') break; // 成功即停
         }
         if (repeats.length === 0) {
           // stop 发生在本格开始前

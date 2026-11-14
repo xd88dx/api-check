@@ -304,8 +304,8 @@ describe('M5 探测可指定模型（G5）', () => {
   });
 });
 
-describe('M5 测试次数与连通率（G1）', () => {
-  it('repeat=3 → 每格请求数=N×模型×密钥，429 计入连通', async () => {
+describe('M7 失败重试语义（I1–I3，取代 §12.1 连通率）', () => {
+  it('I2 成功不停手：首次 ok 仅 1 次请求；首次 429 定案 rate_limited 不重试', async () => {
     const m = await start((_req, res, body) => {
       let model = '';
       try { model = (JSON.parse(body) as { model: string }).model; } catch { /* ignore */ }
@@ -320,40 +320,106 @@ describe('M5 测试次数与连通率（G1）', () => {
     const { store, channelId, keyIds } = await setupChannel(m, ['m-ok', 'm-429']);
     acquireTask(channelId, 'test', 0);
     await runTest(store, channelId, { intervalMs: 5, timeoutMs: 3000, repeat: 3 });
-    // 2 模型 × 2 密钥 × 3 次 = 12 请求
-    expect(m.requests).toHaveLength(12);
+    // 2 模型 × 2 密钥，每格首次即成功 → 共 4 请求（不再乘 N）
+    expect(m.requests).toHaveLength(4);
     const results = store.getState().channels['c1']!.results!;
-    const okCell = results['m-ok']![keyIds[0]]!;
-    expect(okCell.repeats).toHaveLength(3);
-    expect(okCell.repeats!.every((r) => r.cls === 'ok')).toBe(true);
-    const limitedCell = results['m-429']![keyIds[0]]!;
-    expect(limitedCell.cls).toBe('rate_limited');
-    expect(limitedCell.repeats!.filter((r) => r.cls === 'rate_limited')).toHaveLength(3);
+    for (const keyId of keyIds) {
+      const okCell = results['m-ok']![keyId]!;
+      expect(okCell.repeats).toHaveLength(1);
+      expect(okCell.cls).toBe('ok');
+      const limitedCell = results['m-429']![keyId]!;
+      expect(limitedCell.cls).toBe('rate_limited');
+      expect(limitedCell.repeats).toHaveLength(1);
+    }
   });
 
-  it('连通率色块规则：1 ok+2 503→warn；全 timeout→muted；全 error(503)→bad；主 cls=最后一次非失败', () => {
+  it('I1 N=3：首两次 503 第三次 200 → 最终 ok，延迟=成功那次真实值，重试 2 次后成功', async () => {
+    let n = 0;
+    const m = await start((_req, res) => {
+      n++;
+      if (n < 3) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end('MOCK_503');
+      } else {
+        setTimeout(() => {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(okBody());
+        }, 40);
+      }
+    });
+    const { store, channelId, keyIds } = await setupChannel(m, ['m1']);
+    acquireTask(channelId, 'test', 0);
+    await runTest(store, channelId, { intervalMs: 5, timeoutMs: 3000, repeat: 3, keyIds: [keyIds[0]] });
+    expect(m.requests).toHaveLength(3);
+    const cell = store.getState().channels['c1']!.results!['m1']![keyIds[0]]!;
+    expect(cell.repeats).toHaveLength(3);
+    expect(cell.repeats!.map((r) => r.httpStatus)).toEqual([503, 503, 200]);
+    expect(cell.cls).toBe('ok');
+    // 主字段=成功那次（最后一次）：延迟与第三次明细一致
+    expect(cell.latencyMs).toBe(cell.repeats![2]!.latencyMs);
+    expect(cell.latencyMs).toBeGreaterThanOrEqual(40);
+    expect(cell.httpStatus).toBe(200);
+  });
+
+  it('I1 N=2 同场景全败 → 显示最后一次失败（503），仅 2 次请求', async () => {
+    let n = 0;
+    const m = await start((_req, res) => {
+      n++;
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(`MOCK_503_${n}`);
+    });
+    const { store, channelId, keyIds } = await setupChannel(m, ['m1']);
+    acquireTask(channelId, 'test', 0);
+    await runTest(store, channelId, { intervalMs: 5, timeoutMs: 3000, repeat: 2, keyIds: [keyIds[0]] });
+    expect(m.requests).toHaveLength(2); // 第三次 200 永不发生
+    const cell = store.getState().channels['c1']!.results!['m1']![keyIds[0]]!;
+    expect(cell.repeats).toHaveLength(2);
+    expect(cell.cls).toBe('error');
+    expect(cell.httpStatus).toBe(503);
+    expect(cell.latencyMs).toBe(cell.repeats![1]!.latencyMs);
+    expect(cell.rawSnippet).toBe('MOCK_503_2');
+  });
+
+  it('I3 重试间隔：重试请求与首次间隔 ≥ intervalMs', async () => {
+    const arrivals: number[] = [];
+    const m = await start((_req, res) => {
+      arrivals.push(Date.now());
+      if (arrivals.length === 1) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end('MOCK_503');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(okBody());
+      }
+    });
+    const { store, channelId, keyIds } = await setupChannel(m, ['m1']);
+    acquireTask(channelId, 'test', 0);
+    await runTest(store, channelId, { intervalMs: 250, timeoutMs: 3000, repeat: 3, keyIds: [keyIds[0]] });
+    expect(arrivals).toHaveLength(2); // 第二次成功即停
+    expect(arrivals[1]! - arrivals[0]!).toBeGreaterThanOrEqual(250);
+    const cell = store.getState().channels['c1']!.results!['m1']![keyIds[0]]!;
+    expect(cell.cls).toBe('ok');
+    expect(cell.repeats).toHaveLength(2); // 1 次重试后成功
+  });
+
+  it('summarizeCell：主字段=最后一次尝试（成功即停；全败取最后一次失败）', () => {
     const mk = (cls: CellResult['cls'], status: number | null = 200) => ({
       cls, latencyMs: 1, httpStatus: status, rawSnippet: '', at: '',
     });
-    const tone = (r: CellResult): string => {
-      const ok = r.repeats!.filter((x) => x.cls === 'ok' || x.cls === 'rate_limited').length;
-      const total = r.repeats!.length;
-      const ratio = ok / total;
-      if (ratio >= 0.5) return 'ok';
-      if (ratio > 0) return 'warn';
-      if (r.repeats!.every((x) => x.cls === 'timeout')) return 'muted';
-      return 'bad';
-    };
-    const a = summarizeCell([mk('ok'), mk('error', 503), mk('error', 503)]);
-    expect(tone(a)).toBe('warn');
-    const b = summarizeCell([mk('timeout'), mk('timeout'), mk('timeout')]);
-    expect(tone(b)).toBe('muted');
-    const c = summarizeCell([mk('error', 503), mk('error', 503), mk('error', 503)]);
-    expect(tone(c)).toBe('bad');
-    // 主 cls：最后一次非失败结果；全失败取最后一次
+    // 重试 2 次后成功：主字段=第三次（ok）
+    const a = summarizeCell([mk('error', 503), mk('error', 503), mk('ok')]);
     expect(a.cls).toBe('ok');
+    expect(a.httpStatus).toBe(200);
+    expect(a.repeats).toHaveLength(3);
+    // 全败：主字段=最后一次失败
+    const b = summarizeCell([mk('timeout'), mk('timeout')]);
     expect(b.cls).toBe('timeout');
-    expect(c.cls).toBe('error');
+    expect(b.repeats).toHaveLength(2);
+    // N=1：主字段=该次结果
+    const c = summarizeCell([mk('rate_limited', 429)]);
+    expect(c.cls).toBe('rate_limited');
+    expect(c.httpStatus).toBe(429);
+    expect(c.repeats).toHaveLength(1);
   });
 
   it('N=1 形态与旧版一致：repeats 长度=1，主字段等于该次结果', async () => {

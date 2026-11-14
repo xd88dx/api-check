@@ -35,7 +35,7 @@ export interface Channel {
 export interface TestDefaults {
   intervalMs: number; // 默认 1000
   timeoutMs: number; // 默认 60000
-  repeat: number; // M5：每格测试次数 1–10，默认 1
+  repeat: number; // M7 §14：失败重试次数（总尝试上限）1–10，默认 1
 }
 
 export interface ChannelsConfig {
@@ -69,7 +69,7 @@ export interface CellResult {
   httpStatus: number | null;
   rawSnippet: string;
   at: string;
-  /** M5：每次明细（长度=repeat）。主字段=最后一次非失败结果（全失败取最后一次） */
+  /** M7 §14：每次尝试明细（成功即停，长度 ≤ repeat）。主字段=最后一次尝试结果。 */
   repeats?: RepeatDetail[];
 }
 

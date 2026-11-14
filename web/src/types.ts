@@ -41,7 +41,7 @@ export interface CellResult {
   httpStatus: number | null;
   rawSnippet: string;
   at: string;
-  /** M5：每次明细（长度=repeat）。主字段=最后一次非失败结果（全失败取最后一次） */
+  /** M7 §14：每次尝试明细（成功即停，长度 ≤ repeat）。主字段=最后一次尝试结果。 */
   repeats?: RepeatDetail[];
 }
 

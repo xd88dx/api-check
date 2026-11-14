@@ -11,8 +11,6 @@ interface Props {
   onRefresh: () => Promise<void>;
 }
 
-type ConnectivityTone = 'ok' | 'warn' | 'muted' | 'bad';
-
 const CLS_COLORS: Record<Cls, string> = {
   ok: 'ok',
   unsupported: 'bad',
@@ -21,19 +19,6 @@ const CLS_COLORS: Record<Cls, string> = {
   timeout: 'muted',
   error: 'bad',
 };
-
-/** M5：连通率 = count(cls ∈ {ok, rate_limited}) / N */
-function connectivity(repeats: { cls: Cls }[]): { n: number; total: number; tone: ConnectivityTone } {
-  const total = repeats.length;
-  const connected = repeats.filter((r) => r.cls === 'ok' || r.cls === 'rate_limited').length;
-  const r = connected / total;
-  let tone: ConnectivityTone;
-  if (r >= 0.5) tone = 'ok';
-  else if (r > 0) tone = 'warn';
-  else if (repeats.every((x) => x.cls === 'timeout')) tone = 'muted';
-  else tone = 'bad';
-  return { n: connected, total, tone };
-}
 
 function formatLatency(ms: number, t: (k: string) => string): string {
   return ms < 1000 ? `${ms} ${t('matrix.ms')}` : `${(ms / 1000).toFixed(1)} ${t('matrix.sec')}`;
@@ -284,8 +269,14 @@ export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs,
                   const cell = results?.[m.id]?.[k.id];
                   const isCurrent = task?.current?.modelId === m.id && task?.current?.keyId === k.id;
                   const repeats = cell?.repeats;
-                  const conn = repeats && repeats.length > 1 ? connectivity(repeats) : null;
-                  const color = conn ? conn.tone : cell ? CLS_COLORS[cell.cls] : '';
+                  // M7 §14：色块按最终 cls；有重试经历附标注（成功=重试 K 次后成功，全败=重试 N 次均失败）
+                  const color = cell ? CLS_COLORS[cell.cls] : '';
+                  const success = cell ? cell.cls === 'ok' || cell.cls === 'rate_limited' : false;
+                  const retryNote = repeats && repeats.length > 1
+                    ? success
+                      ? t('matrix.retrySuccess', { n: repeats.length - 1 })
+                      : t('matrix.retryAllFail', { n: repeats.length })
+                    : null;
                   const tooltip = repeats && repeats.length > 1
                     ? repeats.map((r, i) => `#${i + 1} ${t(`matrix.cls.${r.cls}`)} · ${formatLatency(r.latencyMs, t)}${r.httpStatus !== null ? ` · ${r.httpStatus}` : ''}`).join('\n')
                     : cell?.rawSnippet;
@@ -296,8 +287,8 @@ export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs,
                       title={tooltip}
                     >
                       {cell ? (
-                        <span className={`cls-badge cls-${conn ? conn.tone : CLS_COLORS[cell.cls]}`}>
-                          {conn ? `${conn.n}/${conn.total} · ${t(`matrix.cls.${cell.cls}`)}` : t(`matrix.cls.${cell.cls}`)}
+                        <span className={`cls-badge cls-${color}`}>
+                          {t(`matrix.cls.${cell.cls}`)}
                         </span>
                       ) : isCurrent ? (
                         <span className="matrix-running">…</span>
@@ -306,6 +297,7 @@ export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs,
                         <span className="matrix-cell-meta">
                           <span>{formatLatency(cell.latencyMs, t)}</span>
                           {cell.httpStatus !== null && cell.cls !== 'ok' && <span>{cell.httpStatus}</span>}
+                          {retryNote && <span className="matrix-retry-note">{retryNote}</span>}
                         </span>
                       )}
                     </td>
