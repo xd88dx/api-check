@@ -52,6 +52,7 @@ const zh = {
   'probe.sec': '秒',
   'probe.failed': '探测失败：',
   'probe.noKey': '未配置密钥，请先在密钥管理中添加',
+  'probe.via': 'via',
   'cls.ok': '可用',
   'cls.unsupported': '端点不存在',
   'cls.auth': '认证失败',

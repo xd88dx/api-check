@@ -175,6 +175,15 @@ button.link {
   font-size: 13px;
 }
 .probe-proto { font-weight: 600; }
+.probe-model {
+  display: block;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .probe-url {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;

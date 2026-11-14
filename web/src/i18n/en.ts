@@ -55,6 +55,7 @@ const en: Dict = {
   'probe.sec': 's',
   'probe.failed': 'Probe failed: ',
   'probe.noKey': 'No key configured. Add one in Keys first.',
+  'probe.via': 'via',
   'cls.ok': 'OK',
   'cls.unsupported': 'Endpoint not found',
   'cls.auth': 'Auth failed',

@@ -135,6 +135,70 @@ describe('probeAll 分类（C1 五分类各一例）', () => {
   });
 });
 
+describe('probeAll 多候选换模型（坏模型/拥堵适配）', () => {
+  it('首候选 500 → 换第二候选 200 → ok 且记录所用模型', async () => {
+    const m = await start((_req, res, body) => {
+      const model = (JSON.parse(body || '{}') as { model?: string }).model;
+      if (model === 'bad-model') {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end('MOCK_UPSTREAM_BAD_MODEL_500');
+      } else {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { content: 'pong' } }] }));
+      }
+    });
+    const r = await probeAll({
+      baseUrl: `${m.baseUrl}/v1`, apiKey: KEY, timeoutMs: 3000, model: ['bad-model', 'good-model'],
+    });
+    expect(r.openai.cls).toBe('ok');
+    expect(r.openai.httpStatus).toBe(200);
+    expect(r.openai.model).toBe('good-model');
+  });
+
+  it('首候选挂死超时 → 换第二候选 ok', async () => {
+    const m = await start((_req, res, body) => {
+      const model = (JSON.parse(body || '{}') as { model?: string }).model;
+      if (model === 'hang-model') return; // 永不响应
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ choices: [{ message: { content: 'pong' } }] }));
+    });
+    const t0 = Date.now();
+    const r = await probeAll({
+      baseUrl: `${m.baseUrl}/v1`, apiKey: KEY, timeoutMs: 800, model: ['hang-model', 'good-model'],
+    });
+    const elapsed = Date.now() - t0;
+    expect(r.openai.cls).toBe('ok');
+    expect(r.openai.model).toBe('good-model');
+    expect(elapsed).toBeLessThan(5000);
+  });
+
+  it('三候选全失败 → error + candidates 前缀', async () => {
+    const m = await start((_req, res) => {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end('MOCK_UPSTREAM_ALL_FAILED');
+    });
+    const r = await probeAll({
+      baseUrl: `${m.baseUrl}/v1`, apiKey: KEY, timeoutMs: 3000, model: ['m1', 'm2', 'm3'],
+    });
+    expect(r.openai.cls).toBe('error');
+    expect(r.openai.model).toBe('m3');
+    expect(r.openai.rawSnippet.startsWith('candidates:m1,m2,m3 all failed')).toBe(true);
+    expect(r.openai.rawSnippet).toContain('MOCK_UPSTREAM_ALL_FAILED');
+  });
+
+  it('端点级 404 不换候选（unsupported 定案）', async () => {
+    const m = await start((_req, res) => {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { message: 'MOCK_UPSTREAM_404_NOT_FOUND' } }));
+    });
+    const r = await probeAll({
+      baseUrl: `${m.baseUrl}/v1`, apiKey: KEY, timeoutMs: 3000, model: ['m1', 'm2'],
+    });
+    expect(r.openai.cls).toBe('unsupported');
+    expect(m.requests.filter((q) => q.url.endsWith('/chat/completions'))).toHaveLength(1);
+  });
+});
+
 describe('firstOkProtocol', () => {
   it('按 openai → responses → anthropic → gemini 顺序取第一个 ok', () => {
     const probe = {

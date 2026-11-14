@@ -16,6 +16,7 @@ export interface PublicProbeResult {
   httpStatus: number | null;
   rawSnippet: string;
   at: string;
+  model?: string; // 探测实际命中的模型（目录非空时显示）
 }
 
 export interface ChannelStatePublic {

@@ -90,7 +90,10 @@ export default function ProbePanel({ channel, onError, onRefresh }: Props) {
         const color = CLS_COLORS[r.cls];
         return (
           <div key={proto} className="probe-row">
-            <span className="probe-proto">{proto}</span>
+            <span className="probe-proto">
+              {proto}
+              {r.model && <span className="probe-model">{t('probe.via')} {r.model}</span>}
+            </span>
             <span className={`cls-badge cls-${color}`}>{t(`cls.${r.cls}`)}</span>
             <code className="probe-url" title={r.rawSnippet}>{r.url}</code>
             <span className="probe-http">{r.httpStatus ?? '—'}</span>

@@ -51,6 +51,7 @@ export interface ProbeResult {
   httpStatus: number | null;
   rawSnippet: string;
   at: string;
+  model?: string; // 探测实际命中的模型（目录非空时记录）
 }
 
 export interface CellResult {

@@ -36,6 +36,16 @@ export function buildProbeUrl(baseUrl: string, proto: Protocol): string {
 
 const FALLBACK_MODEL = 'gpt-4o-mini';
 
+/** 候选模型上限与单候选超时上限（避免 3×60s 等待） */
+const MAX_CANDIDATES = 3;
+const CANDIDATE_TIMEOUT_CAP_MS = 30000;
+
+/** 「模型/上游侧失败」才换候选重试：timeout 或 5xx 系 error；端点级 404/401/429 不换 */
+function shouldSwitchCandidate(r: ProbeResult): boolean {
+  if (r.cls === 'timeout') return true;
+  return r.cls === 'error' && r.httpStatus !== null && r.httpStatus >= 500;
+}
+
 /** 单协议最小请求规格（探测与矩阵共用） */
 export interface ProbeRequestSpec {
   displayUrl: string; // 展示用，不含 key
@@ -116,6 +126,7 @@ async function probeOne(proto: Protocol, opts: ProbeOpts): Promise<ProbeResult> 
     httpStatus: res.status,
     rawSnippet: snippet(res.body),
     at: new Date().toISOString(),
+    model,
   };
 }
 
@@ -125,24 +136,47 @@ export interface ProbeAllOpts {
   apiKey: string;
   insecure?: boolean;
   timeoutMs?: number;
-  model?: string; // 目录非空时传目录首模型 id，否则用占位模型
+  model?: string | string[]; // 目录非空时传候选模型（string 单候选或 string[] 最多取前 3 个），否则用占位模型
 }
 
 export async function probeAll(opts: ProbeAllOpts): Promise<Record<string, ProbeResult>> {
   const result: Record<string, ProbeResult> = {};
+  // 候选模型：目录非空时按目录顺序最多取 3 个；否则占位单候选
+  const rawCandidates = opts.model
+    ? Array.isArray(opts.model) ? opts.model : [opts.model]
+    : [FALLBACK_MODEL];
+  const candidates: string[] = rawCandidates.slice(0, MAX_CANDIDATES);
+  const hasCatalog = !!opts.model;
+  // 单候选超时收紧（仅目录非空时），避免 3×60s 等待
+  const perTimeout = hasCatalog
+    ? Math.min(opts.timeoutMs ?? 60000, CANDIDATE_TIMEOUT_CAP_MS)
+    : (opts.timeoutMs ?? 60000);
   for (const proto of PROTOCOLS) {
-    try {
-      result[proto] = await probeOne(proto, opts);
-    } catch {
-      result[proto] = {
-        url: buildProbeUrl(opts.baseUrl, proto),
-        cls: 'error',
-        latencyMs: 0,
-        httpStatus: null,
-        rawSnippet: '',
-        at: new Date().toISOString(),
+    let last: ProbeResult | null = null;
+    for (const model of candidates) {
+      try {
+        last = await probeOne(proto, { ...opts, model, timeoutMs: perTimeout });
+      } catch {
+        last = {
+          url: buildProbeUrl(opts.baseUrl, proto),
+          cls: 'error',
+          latencyMs: 0,
+          httpStatus: null,
+          rawSnippet: '',
+          at: new Date().toISOString(),
+          model,
+        };
+      }
+      if (!shouldSwitchCandidate(last)) break; // 非 timeout/error → 定案
+    }
+    // 全部候选失败：cls 取最后一个候选结果，rawSnippet 前缀注明
+    if (last && shouldSwitchCandidate(last) && candidates.length > 1) {
+      last = {
+        ...last,
+        rawSnippet: `candidates:${candidates.join(',')} all failed\n${last.rawSnippet}`,
       };
     }
+    result[proto] = last!;
   }
   return result;
 }
