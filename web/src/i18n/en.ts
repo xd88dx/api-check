@@ -46,7 +46,43 @@ const en: Dict = {
 
   'error.load': 'Failed to load. Please retry.',
   'error.save': 'Failed to save. Please retry.',
-  'error.validation': 'Validation failed: '
-};
+  'error.validation': 'Validation failed: ',
+  'error.taskConflict': 'This channel already has a background task running. Please wait.',
+
+  'probe.title': 'Protocol Probe',
+  'probe.run': 'Run probe',
+  'probe.running': 'Probing…',
+  'probe.url': 'Attempted URL',
+  'probe.latency': 'Latency',
+  'probe.http': 'HTTP',
+  'probe.noResult': 'Not probed yet',
+  'probe.ms': 'ms',
+  'probe.sec': 's',
+  'probe.failed': 'Probe failed: ',
+  'probe.noKey': 'No key configured. Add one in Keys first.',
+  'cls.ok': 'OK',
+  'cls.unsupported': 'Endpoint not found',
+  'cls.auth': 'Auth failed',
+  'cls.rate_limited': 'Rate limited',
+  'cls.timeout': 'Timeout',
+  'cls.error': 'Error',
+
+  'catalog.title': 'Model Catalog',
+  'catalog.refresh': 'Refresh',
+  'catalog.refreshing': 'Fetching…',
+  'catalog.selectAll': 'Select all',
+  'catalog.selectNone': 'Select none',
+  'catalog.addManual': 'Add manually',
+  'catalog.addManualPlaceholder': 'Enter model name and press Enter',
+  'catalog.empty': 'No models',
+  'catalog.ago': 'ago',
+  'catalog.justNow': 'just now',
+  'catalog.minutes': 'min',
+  'catalog.hours': 'h',
+  'catalog.days': 'd',
+  'catalog.failed': 'Catalog fetch failed: ',
+  'catalog.errorEmpty': 'Upstream returned an empty catalog. Existing catalog kept.',
+  'catalog.timestamp': 'Provider list: ',
+}
 
 export default en;

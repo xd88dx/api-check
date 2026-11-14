@@ -3,12 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
 import type { PublicChannel } from '../types';
 import KeyPanel from './KeyPanel';
+import ProbePanel from './ProbePanel';
+import CatalogPanel from './CatalogPanel';
 
 interface Props {
   channel: PublicChannel | null; // null = 新建
   onSaved: (id: string) => void | Promise<void>;
   onBack: () => void;
   onError: (msg: string) => void;
+  onRefresh: () => Promise<void>;
 }
 
 function firstIssueMessage(err: unknown): string | null {
@@ -19,7 +22,7 @@ function firstIssueMessage(err: unknown): string | null {
   return null;
 }
 
-export default function ChannelEdit({ channel, onSaved, onBack, onError }: Props) {
+export default function ChannelEdit({ channel, onSaved, onBack, onError, onRefresh }: Props) {
   const { t } = useTranslation();
   const isNew = channel === null;
   const [name, setName] = useState(channel?.name ?? '');

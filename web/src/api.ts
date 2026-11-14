@@ -1,4 +1,4 @@
-import type { KeyInput, PublicChannel } from './types';
+import type { KeyInput, PublicChannel, TaskState } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -46,5 +46,20 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ keys }),
     });
+  },
+  updateModels(
+    id: string,
+    body: { selected?: string[]; addManual?: string[]; removeManual?: string[] },
+  ): Promise<{ channel: PublicChannel }> {
+    return request(`/channels/${id}/models`, { method: 'PUT', body: JSON.stringify(body) });
+  },
+  startProbe(id: string): Promise<{ task: TaskState }> {
+    return request(`/channels/${id}/probe`, { method: 'POST' });
+  },
+  startCatalog(id: string): Promise<{ task: TaskState }> {
+    return request(`/channels/${id}/catalog`, { method: 'POST' });
+  },
+  getTask(id: string): Promise<{ task: TaskState | null }> {
+    return request(`/channels/${id}/task`);
   },
 };

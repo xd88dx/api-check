@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { json as expressJson, Router, type Request, type Response, type NextFunction } from 'express';
 import { z, ZodError } from 'zod';
-import type { Store, Channel, ChannelKey } from './store.js';
+import type { Store, Channel, ChannelKey, ProbeResult } from './store.js';
 import { mask } from './mask.js';
+import { acquireTask, getTask, runProbe, runCatalog } from './tasks.js';
 
 // ---------- zod schemas ----------
 
@@ -49,8 +50,13 @@ const modelsUpdateSchema = z
   .object({
     selected: z.array(z.string().min(1)).optional(),
     addManual: z.array(z.string().min(1)).optional(),
+    removeManual: z.array(z.string().min(1)).optional(),
   })
-  .refine((v) => v.selected !== undefined || v.addManual !== undefined, 'empty body');
+  .refine(
+    (v) =>
+      v.selected !== undefined || v.addManual !== undefined || v.removeManual !== undefined,
+    'empty body',
+  );
 
 // ---------- helpers ----------
 
@@ -87,6 +93,18 @@ function findChannel(store: Store, id: string): Channel {
   const ch = store.getConfig().channels.find((c) => c.id === id);
   if (!ch) throw new HttpError(404, 'channel not found');
   return ch;
+}
+
+/** 渠道状态（probe/catalogAt 等持久化结果），供前端展示 */
+function channelStatePublic(store: Store, id: string) {
+  const st = store.getState().channels[id];
+  if (!st) return {};
+  const probe: Record<string, ProbeResult> | undefined = st.probe
+    ? Object.fromEntries(
+        Object.entries(st.probe).map(([k, v]) => [k, { ...v, rawSnippet: v.rawSnippet }]),
+      )
+    : undefined;
+  return { probe, catalogAt: st.catalogAt, lastTestAt: st.lastTestAt };
 }
 
 /** 整表替换密钥：有 id 且已存在→更新（key 留空不改）；无 id→新增；缺席→删除 */
@@ -132,9 +150,14 @@ export function createRouter(store: Store): Router {
   const r = Router();
   r.use(expressJson());
 
-  // 渠道列表（key 掩码）
+  // 渠道列表（key 掩码；附带探测/目录状态）
   r.get('/channels', (_req, res) => {
-    res.json({ channels: store.getConfig().channels.map(toPublicChannel) });
+    res.json({
+      channels: store.getConfig().channels.map((ch) => ({
+        ...toPublicChannel(ch),
+        state: channelStatePublic(store, ch.id),
+      })),
+    });
   });
 
   // 新建渠道
@@ -200,6 +223,10 @@ export function createRouter(store: Store): Router {
         }
       }
     }
+    if (body.removeManual) {
+      const rm = new Set(body.removeManual);
+      ch.models = ch.models.filter((m) => !(m.source === 'manual' && rm.has(m.id)));
+    }
     if (body.selected) {
       const set = new Set(body.selected);
       for (const m of ch.models) {
@@ -210,15 +237,39 @@ export function createRouter(store: Store): Router {
     res.json({ channel: toPublicChannel(ch) });
   });
 
-  // ---- M2/M3/M4 占位：任务类端点 ----
+  // ---- M2：探测 / 目录 / 任务轮询 ----
+
+  // 四协议探测（后台任务）
+  r.post('/channels/:id/probe', (req, res) => {
+    const ch = findChannel(store, req.params.id);
+    const task = acquireTask(ch.id, 'probe', 4);
+    if (!task) throw new HttpError(409, 'task_already_running');
+    void runProbe(store, ch.id);
+    res.status(202).json({ task });
+  });
+
+  // 拉取模型目录（后台任务）
+  r.post('/channels/:id/catalog', (req, res) => {
+    const ch = findChannel(store, req.params.id);
+    const task = acquireTask(ch.id, 'catalog', 1);
+    if (!task) throw new HttpError(409, 'task_already_running');
+    void runCatalog(store, ch.id);
+    res.status(202).json({ task });
+  });
+
+  // 任务进度轮询
+  r.get('/channels/:id/task', (req, res) => {
+    const ch = findChannel(store, req.params.id);
+    const task = getTask(ch.id);
+    res.json({ task: task ?? null });
+  });
+
+  // ---- M3/M4 占位：矩阵 / 导出 ----
   const notImplemented = (_req: Request, res: Response) => {
-    res.status(501).json({ error: 'not_implemented', detail: 'planned for M2/M3/M4' });
+    res.status(501).json({ error: 'not_implemented', detail: 'planned for M3/M4' });
   };
-  r.post('/channels/:id/probe', notImplemented);
-  r.post('/channels/:id/catalog', notImplemented);
   r.post('/channels/:id/test', notImplemented);
   r.post('/test/stop', notImplemented);
-  r.get('/channels/:id/task', notImplemented);
   r.get('/channels/:id/export', notImplemented);
 
   return r;

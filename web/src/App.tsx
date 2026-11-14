@@ -72,6 +72,7 @@ export default function App() {
             await refresh();
             setView({ mode: 'edit', id });
           }}
+          onRefresh={refresh}
           onBack={() => setView({ mode: 'list' })}
           onError={(msg) => setError(msg)}
         />
