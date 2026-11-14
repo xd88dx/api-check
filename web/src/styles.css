@@ -236,3 +236,47 @@ button.link {
   line-height: 1;
   padding: 0 2px;
 }
+
+/* ---- M3：矩阵测试 ---- */
+.matrix-panel { margin-top: 24px; }
+.matrix-progress {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 4px 0;
+}
+.matrix-diff {
+  background: #f6f8fa;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin: 8px 0 14px;
+  font-size: 13px;
+}
+.matrix-diff ul { margin: 0 0 8px; padding-left: 18px; }
+.matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.matrix-table th, .matrix-table td {
+  border: 1px solid var(--border);
+  padding: 8px;
+  text-align: center;
+  vertical-align: middle;
+}
+.matrix-table th.matrix-model {
+  text-align: left;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+}
+.matrix-cell-current { background: #ddf4ff; }
+.matrix-running { color: var(--muted); }
+.matrix-cell-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 3px;
+}

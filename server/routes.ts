@@ -3,7 +3,9 @@ import { json as expressJson, Router, type Request, type Response, type NextFunc
 import { z, ZodError } from 'zod';
 import type { Store, Channel, ChannelKey, ProbeResult } from './store.js';
 import { mask } from './mask.js';
-import { acquireTask, getTask, runProbe, runCatalog } from './tasks.js';
+import { acquireTask, getTask, runProbe, runCatalog, stopAllTestTasks } from './tasks.js';
+import { runTest } from './runner.js';
+import { firstOkProtocol } from './probe.js';
 
 // ---------- zod schemas ----------
 
@@ -58,6 +60,13 @@ const modelsUpdateSchema = z
     'empty body',
   );
 
+const testStartSchema = z.object({
+  modelIds: z.array(z.string().min(1)).optional(),
+  keyIds: z.array(z.string().min(1)).optional(),
+  intervalMs: z.number().int().min(0).max(600000).optional(),
+  timeoutMs: z.number().int().min(1000).max(600000).optional(),
+});
+
 // ---------- helpers ----------
 
 export class HttpError extends Error {
@@ -95,7 +104,7 @@ function findChannel(store: Store, id: string): Channel {
   return ch;
 }
 
-/** 渠道状态（probe/catalogAt 等持久化结果），供前端展示 */
+/** 渠道状态（probe/catalog/矩阵结果与任务快照），供前端展示 */
 function channelStatePublic(store: Store, id: string) {
   const st = store.getState().channels[id];
   if (!st) return {};
@@ -104,7 +113,13 @@ function channelStatePublic(store: Store, id: string) {
         Object.entries(st.probe).map(([k, v]) => [k, { ...v, rawSnippet: v.rawSnippet }]),
       )
     : undefined;
-  return { probe, catalogAt: st.catalogAt, lastTestAt: st.lastTestAt };
+  return {
+    probe,
+    catalogAt: st.catalogAt,
+    lastTestAt: st.lastTestAt,
+    results: st.results,
+    task: st.task,
+  };
 }
 
 /** 整表替换密钥：有 id 且已存在→更新（key 留空不改）；无 id→新增；缺席→删除 */
@@ -257,19 +272,58 @@ export function createRouter(store: Store): Router {
     res.status(202).json({ task });
   });
 
-  // 任务进度轮询
+  // 任务进度轮询（无内存任务时回退到 state 快照，重启恢复场景）
   r.get('/channels/:id/task', (req, res) => {
     const ch = findChannel(store, req.params.id);
-    const task = getTask(ch.id);
-    res.json({ task: task ?? null });
+    const mem = getTask(ch.id);
+    if (mem) {
+      res.json({ task: mem });
+      return;
+    }
+    const snap = store.getState().channels[ch.id]?.task;
+    if (snap) {
+      res.json({
+        task: {
+          type: snap.type,
+          running: snap.running,
+          stopped: snap.stopped,
+          currentIndex: snap.current?.index ?? snap.total,
+          total: snap.total,
+          ...(snap.current ? { current: snap.current } : {}),
+          startedAt: '',
+        },
+      });
+      return;
+    }
+    res.json({ task: null });
   });
 
-  // ---- M3/M4 占位：矩阵 / 导出 ----
+  // ---- M3：矩阵测试 ----
+
+  // 启动矩阵（后台任务）
+  r.post('/channels/:id/test', (req, res) => {
+    const ch = findChannel(store, req.params.id);
+    const body = testStartSchema.parse(req.body ?? {});
+    // 主协议 = 探测 ok 的第一个协议；全部非 ok 时拒绝启动并报「先探测」
+    if (!firstOkProtocol(store.getState().channels[ch.id]?.probe)) {
+      throw new HttpError(409, 'probe_first');
+    }
+    const task = acquireTask(ch.id, 'test', 0);
+    if (!task) throw new HttpError(409, 'task_already_running');
+    void runTest(store, ch.id, body);
+    res.status(202).json({ task });
+  });
+
+  // 中断矩阵：当前请求允许完成、队列清空、stopped:true 落盘
+  r.post('/test/stop', (_req, res) => {
+    const n = stopAllTestTasks();
+    res.json({ ok: true, stopped: n });
+  });
+
+  // ---- M4 占位：导出 ----
   const notImplemented = (_req: Request, res: Response) => {
-    res.status(501).json({ error: 'not_implemented', detail: 'planned for M3/M4' });
+    res.status(501).json({ error: 'not_implemented', detail: 'planned for M4' });
   };
-  r.post('/channels/:id/test', notImplemented);
-  r.post('/test/stop', notImplemented);
   r.get('/channels/:id/export', notImplemented);
 
   return r;

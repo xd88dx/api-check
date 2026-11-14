@@ -22,6 +22,24 @@ export interface ChannelStatePublic {
   probe?: Record<string, PublicProbeResult>;
   catalogAt?: string;
   lastTestAt?: string;
+  results?: Record<string, Record<string, CellResult>>;
+  task?: TaskSnapshotPublic;
+}
+
+export interface CellResult {
+  cls: Cls;
+  latencyMs: number;
+  httpStatus: number | null;
+  rawSnippet: string;
+  at: string;
+}
+
+export interface TaskSnapshotPublic {
+  type: 'probe' | 'catalog' | 'test';
+  running: boolean;
+  stopped: boolean;
+  current?: { modelId: string; keyId: string; index: number };
+  total: number;
 }
 
 export interface PublicModel {
@@ -49,6 +67,7 @@ export interface TaskState {
   stopped: boolean;
   currentIndex: number;
   total: number;
+  current?: { modelId: string; keyId: string; index: number };
   error?: string;
   startedAt: string;
   finishedAt?: string;

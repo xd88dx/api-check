@@ -55,7 +55,8 @@ export function request(opts: RequestOptions): Promise<RawResponse> {
           resolve({ status: res.statusCode ?? null, body: Buffer.concat(chunks).toString('utf8'), timedOut: false });
         });
         res.on('error', () => {
-          resolve({ status: res.statusCode ?? null, body: Buffer.concat(chunks).toString('utf8'), timedOut: false });
+          // 静默超时触发的 destroy 会走到这里：必须保持 timedOut 标记（D3）
+          resolve({ status: res.statusCode ?? null, body: Buffer.concat(chunks).toString('utf8'), timedOut: silenceTimedOut });
         });
       },
     );

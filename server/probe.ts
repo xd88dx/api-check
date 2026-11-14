@@ -19,7 +19,7 @@ function stripTrailingV1(base: string): string {
   return base.endsWith('/v1') ? base.slice(0, -3) : base;
 }
 
-/** 按 SPEC §4 表拼接各协议探测 URL */
+/** 按 SPEC §4 表拼接各协议探测 URL（不含 key，可直接展示） */
 export function buildProbeUrl(baseUrl: string, proto: Protocol): string {
   const clean = stripTrailingSlash(baseUrl);
   switch (proto) {
@@ -36,6 +36,58 @@ export function buildProbeUrl(baseUrl: string, proto: Protocol): string {
 
 const FALLBACK_MODEL = 'gpt-4o-mini';
 
+/** 单协议最小请求规格（探测与矩阵共用） */
+export interface ProbeRequestSpec {
+  displayUrl: string; // 展示用，不含 key
+  fetchUrl: URL; // 实际请求 URL（gemini 含 ?key=）
+  method: 'GET' | 'POST';
+  headers: Record<string, string>;
+  body?: string;
+  okMarkers: string[];
+}
+
+export function buildProbeRequest(
+  proto: Protocol,
+  baseUrl: string,
+  apiKey: string,
+  model = FALLBACK_MODEL,
+): ProbeRequestSpec {
+  const displayUrl = buildProbeUrl(baseUrl, proto);
+  const fetchUrl = new URL(displayUrl);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  let body: string | undefined;
+  let okMarkers: string[] = [];
+
+  switch (proto) {
+    case 'openai':
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      body = JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 1,
+        stream: false,
+      });
+      okMarkers = ['choices'];
+      break;
+    case 'responses':
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      body = JSON.stringify({ model, input: 'ping', max_output_tokens: 16 });
+      okMarkers = ['output_text'];
+      break;
+    case 'anthropic':
+      headers['x-api-key'] = apiKey;
+      headers['anthropic-version'] = '2023-06-01';
+      body = JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] });
+      okMarkers = ['content'];
+      break;
+    case 'gemini':
+      fetchUrl.searchParams.set('key', apiKey);
+      okMarkers = ['models'];
+      break;
+  }
+  return { displayUrl, fetchUrl, method: proto === 'gemini' ? 'GET' : 'POST', headers, body, okMarkers };
+}
+
 interface ProbeOpts {
   baseUrl: string;
   apiKey: string;
@@ -46,86 +98,25 @@ interface ProbeOpts {
 
 async function probeOne(proto: Protocol, opts: ProbeOpts): Promise<ProbeResult> {
   const { baseUrl, apiKey, insecure = false, timeoutMs = 60000, model = FALLBACK_MODEL } = opts;
-  const urlStr = buildProbeUrl(baseUrl, proto);
-  const url = new URL(urlStr);
+  const spec = buildProbeRequest(proto, baseUrl, apiKey, model);
   const startedAt = Date.now();
-
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  let body: string | undefined;
-  let okMarkers: string[] = [];
-
-  switch (proto) {
-    case 'openai': {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      body = JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: 'ping' }],
-        max_tokens: 1,
-        stream: false,
-      });
-      okMarkers = ['choices'];
-      const res = await request({ url, method: 'POST', headers, body, timeoutMs, insecure });
-      const latency = Date.now() - startedAt;
-      return {
-        url: urlStr,
-        cls: classify({ httpStatus: res.status, body: snippet(res.body), timedOut: res.timedOut, okMarkers }),
-        latencyMs: latency,
-        httpStatus: res.status,
-        rawSnippet: snippet(res.body),
-        at: new Date().toISOString(),
-      };
-    }
-    case 'responses': {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      body = JSON.stringify({ model, input: 'ping', max_output_tokens: 16 });
-      okMarkers = ['output_text'];
-      const res = await request({ url, method: 'POST', headers, body, timeoutMs, insecure });
-      const latency = Date.now() - startedAt;
-      return {
-        url: urlStr,
-        cls: classify({ httpStatus: res.status, body: snippet(res.body), timedOut: res.timedOut, okMarkers }),
-        latencyMs: latency,
-        httpStatus: res.status,
-        rawSnippet: snippet(res.body),
-        at: new Date().toISOString(),
-      };
-    }
-    case 'anthropic': {
-      headers['x-api-key'] = apiKey;
-      headers['anthropic-version'] = '2023-06-01';
-      body = JSON.stringify({
-        model,
-        max_tokens: 1,
-        messages: [{ role: 'user', content: 'ping' }],
-      });
-      okMarkers = ['content'];
-      const res = await request({ url, method: 'POST', headers, body, timeoutMs, insecure });
-      const latency = Date.now() - startedAt;
-      return {
-        url: urlStr,
-        cls: classify({ httpStatus: res.status, body: snippet(res.body), timedOut: res.timedOut, okMarkers }),
-        latencyMs: latency,
-        httpStatus: res.status,
-        rawSnippet: snippet(res.body),
-        at: new Date().toISOString(),
-      };
-    }
-    case 'gemini': {
-      // GET ?key= 或头 x-goog-api-key，这里走 query
-      url.searchParams.set('key', apiKey);
-      okMarkers = ['models'];
-      const res = await request({ url, method: 'GET', headers, timeoutMs, insecure });
-      const latency = Date.now() - startedAt;
-      return {
-        url: urlStr, // 探测行展示原始 URL（?key= 不出现在展示中，避免泄漏）
-        cls: classify({ httpStatus: res.status, body: snippet(res.body), timedOut: res.timedOut, okMarkers }),
-        latencyMs: latency,
-        httpStatus: res.status,
-        rawSnippet: snippet(res.body),
-        at: new Date().toISOString(),
-      };
-    }
-  }
+  const res = await request({
+    url: spec.fetchUrl,
+    method: spec.method,
+    headers: spec.headers,
+    body: spec.body,
+    timeoutMs,
+    insecure,
+  });
+  const latency = Date.now() - startedAt;
+  return {
+    url: spec.displayUrl,
+    cls: classify({ httpStatus: res.status, body: snippet(res.body), timedOut: res.timedOut, okMarkers: spec.okMarkers }),
+    latencyMs: latency,
+    httpStatus: res.status,
+    rawSnippet: snippet(res.body),
+    at: new Date().toISOString(),
+  };
 }
 
 /** 对单渠道执行四协议探测（取第一个启用的 key）。结果按协议名记录。 */
@@ -139,13 +130,11 @@ export interface ProbeAllOpts {
 export async function probeAll(opts: ProbeAllOpts): Promise<Record<string, ProbeResult>> {
   const result: Record<string, ProbeResult> = {};
   for (const proto of PROTOCOLS) {
-    // 任一协议失败（异常）不阻断其余；错误计入 error
     try {
       result[proto] = await probeOne(proto, opts);
     } catch {
-      const urlStr = buildProbeUrl(opts.baseUrl, proto);
       result[proto] = {
-        url: urlStr,
+        url: buildProbeUrl(opts.baseUrl, proto),
         cls: 'error',
         latencyMs: 0,
         httpStatus: null,

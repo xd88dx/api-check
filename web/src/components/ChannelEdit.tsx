@@ -5,6 +5,7 @@ import type { PublicChannel } from '../types';
 import KeyPanel from './KeyPanel';
 import ProbePanel from './ProbePanel';
 import CatalogPanel from './CatalogPanel';
+import MatrixPanel from './MatrixPanel';
 
 interface Props {
   channel: PublicChannel | null; // null = 新建
@@ -120,6 +121,7 @@ export default function ChannelEdit({ channel, onSaved, onBack, onError, onRefre
           <KeyPanel channel={channel} onError={onError} />
           <ProbePanel channel={channel} onError={onError} onRefresh={onRefresh} />
           <CatalogPanel channel={channel} onError={onError} onRefresh={onRefresh} />
+          <MatrixPanel channel={channel} onError={onError} onRefresh={onRefresh} />
         </>
       )}
     </main>

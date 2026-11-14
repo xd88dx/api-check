@@ -62,4 +62,13 @@ export const api = {
   getTask(id: string): Promise<{ task: TaskState | null }> {
     return request(`/channels/${id}/task`);
   },
+  startTest(
+    id: string,
+    body: { modelIds?: string[]; keyIds?: string[]; intervalMs?: number; timeoutMs?: number } = {},
+  ): Promise<{ task: TaskState }> {
+    return request(`/channels/${id}/test`, { method: 'POST', body: JSON.stringify(body) });
+  },
+  stopTest(): Promise<{ ok: boolean; stopped: number }> {
+    return request('/test/stop', { method: 'POST', body: JSON.stringify({}) });
+  },
 };

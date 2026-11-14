@@ -13,6 +13,17 @@ async function main() {
   await store.init();
   logger.info('store restored', { channels: store.getConfig().channels.length });
 
+  // 进程重启 = 后台任务全部中断：把 running 快照折算为 stopped（D6）
+  let folded = false;
+  for (const st of Object.values(store.getState().channels)) {
+    if (st.task?.running) {
+      st.task.running = false;
+      st.task.stopped = true;
+      folded = true;
+    }
+  }
+  if (folded) await store.saveState();
+
   const app = express();
   app.use('/api', createRouter(store));
   app.use(errorHandler);

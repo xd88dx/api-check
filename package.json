@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "tsx watch server/index.ts",
-    "start": "node server/dist/index.js"
+    "start": "node server/dist/index.js",
+    "i18n:audit": "node scripts/i18n_audit.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

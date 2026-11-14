@@ -1,6 +1,6 @@
 // 后台任务管理（SPEC §3）：单渠道同一时刻只允许一个任务（探测/目录/矩阵互斥），
 // 占用中再发起返回 409。任务异步执行，前端轮询 GET /channels/:id/task。
-import type { Store } from './store.js';
+import type { Store, TaskSnapshot } from './store.js';
 import { probeAll } from './probe.js';
 import { fetchCatalog, mergeCatalog } from './catalog.js';
 import { logger } from './logger.js';
@@ -13,6 +13,7 @@ export interface TaskState {
   stopped: boolean;
   currentIndex: number;
   total: number;
+  current?: { modelId: string; keyId: string; index: number };
   error?: string;
   startedAt: string;
   finishedAt?: string;
@@ -40,18 +41,41 @@ export function acquireTask(channelId: string, type: TaskType, total: number): T
   return task;
 }
 
-export function setStopped(channelId: string): void {
-  const task = tasks.get(channelId);
-  if (task) task.stopped = true;
+/** POST /api/test/stop：中断所有运行中的矩阵任务（当前请求允许完成，队列清空） */
+export function stopAllTestTasks(): number {
+  let n = 0;
+  for (const task of tasks.values()) {
+    if (task.type === 'test' && task.running) {
+      task.stopped = true;
+      n++;
+    }
+  }
+  return n;
 }
 
-function finish(channelId: string, error?: string): void {
+/** 任务快照落盘（state.channels[id].task，SPEC §5/§8） */
+export async function persistSnapshot(store: Store, channelId: string, task: TaskState): Promise<void> {
+  const st = store.getState();
+  if (!st.channels[channelId]) return;
+  const snap: TaskSnapshot = {
+    type: task.type,
+    running: task.running,
+    stopped: task.stopped,
+    total: task.total,
+    ...(task.current ? { current: { ...task.current } } : {}),
+  };
+  st.channels[channelId].task = snap;
+  await store.saveState();
+}
+
+/** 结束任务并落盘快照（error 时记录错误） */
+export async function finishTask(store: Store, channelId: string, error?: string): Promise<void> {
   const task = tasks.get(channelId);
-  if (task) {
-    task.running = false;
-    if (error) task.error = error;
-    task.finishedAt = new Date().toISOString();
-  }
+  if (!task) return;
+  task.running = false;
+  if (error) task.error = error;
+  task.finishedAt = new Date().toISOString();
+  await persistSnapshot(store, channelId, task);
 }
 
 /** 启动探测任务（取第一个启用的 key；无 key 报错） */
@@ -60,9 +84,9 @@ export async function runProbe(store: Store, channelId: string): Promise<void> {
   if (!task) return;
   try {
     const ch = store.getConfig().channels.find((c) => c.id === channelId);
-    if (!ch) { finish(channelId, 'channel not found'); return; }
+    if (!ch) { await finishTask(store, channelId, 'channel not found'); return; }
     const key = ch.keys.find((k) => k.enabled) ?? ch.keys[0];
-    if (!key) { finish(channelId, 'no key configured'); return; }
+    if (!key) { await finishTask(store, channelId, 'no key configured'); return; }
     const results = await probeAll({
       baseUrl: ch.baseUrl,
       apiKey: key.key,
@@ -76,10 +100,10 @@ export async function runProbe(store: Store, channelId: string): Promise<void> {
     logger.info(`probe done channel=${channelId}`, {
       cls: Object.fromEntries(Object.entries(results).map(([p, r]) => [p, r.cls])),
     });
-    finish(channelId);
+    await finishTask(store, channelId);
   } catch (e) {
     logger.error('probe failed', { error: (e as Error).message });
-    finish(channelId, (e as Error).message);
+    await finishTask(store, channelId, (e as Error).message);
   }
 }
 
@@ -89,9 +113,9 @@ export async function runCatalog(store: Store, channelId: string): Promise<void>
   if (!task) return;
   try {
     const ch = store.getConfig().channels.find((c) => c.id === channelId);
-    if (!ch) { finish(channelId, 'channel not found'); return; }
+    if (!ch) { await finishTask(store, channelId, 'channel not found'); return; }
     const key = ch.keys.find((k) => k.enabled) ?? ch.keys[0];
-    if (!key) { finish(channelId, 'no key configured'); return; }
+    if (!key) { await finishTask(store, channelId, 'no key configured'); return; }
     const probe = store.getState().channels[channelId]?.probe;
     const result = await fetchCatalog({
       baseUrl: ch.baseUrl,
@@ -102,12 +126,12 @@ export async function runCatalog(store: Store, channelId: string): Promise<void>
     });
     if (!result.ok) {
       // 失败/空目录：明确报错，保留现有目录
-      finish(channelId, `catalog_failed: ${result.error ?? 'unknown'}`);
+      await finishTask(store, channelId, `catalog_failed: ${result.error ?? 'unknown'}`);
       return;
     }
     const cfg = store.getConfig();
     const idx = cfg.channels.findIndex((c) => c.id === channelId);
-    if (idx < 0) { finish(channelId, 'channel not found'); return; }
+    if (idx < 0) { await finishTask(store, channelId, 'channel not found'); return; }
     cfg.channels[idx].models = mergeCatalog(cfg.channels[idx].models, result.models);
     await store.saveConfig();
     const st = store.getState();
@@ -115,9 +139,9 @@ export async function runCatalog(store: Store, channelId: string): Promise<void>
     st.channels[channelId].catalogAt = new Date().toISOString();
     await store.saveState();
     logger.info(`catalog done channel=${channelId}`, { count: result.models.length });
-    finish(channelId);
+    await finishTask(store, channelId);
   } catch (e) {
     logger.error('catalog failed', { error: (e as Error).message });
-    finish(channelId, (e as Error).message);
+    await finishTask(store, channelId, (e as Error).message);
   }
 }

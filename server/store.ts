@@ -62,9 +62,10 @@ export interface CellResult {
 }
 
 export interface TaskSnapshot {
+  type: 'probe' | 'catalog' | 'test';
   running: boolean;
   stopped: boolean;
-  currentIndex: number;
+  current?: { modelId: string; keyId: string; index: number };
   total: number;
 }
 
