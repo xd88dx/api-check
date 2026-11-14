@@ -4,7 +4,7 @@
 // 结果逐格写 state 即刻落盘。
 import { request } from './httpclient.js';
 import { classify, snippet } from './classify.js';
-import { buildProbeRequest, firstOkProtocol } from './probe.js';
+import { buildProbeRequest, pickMainProtocol } from './probe.js';
 import type { Store, CellResult } from './store.js';
 import { finishTask, getTask, persistSnapshot } from './tasks.js';
 import { logger } from './logger.js';
@@ -54,9 +54,9 @@ export async function runTest(store: Store, channelId: string, opts: RunTestOpts
       : enabledKeys
     );
 
-    // 主协议 = 探测 ok 的第一个；全部非 ok 时拒绝启动并报「先探测」
+    // 主协议 = 探测 ok 的第一个；无 ok 但目录非空时兜底 openai（分组限模型源上探测必 503）
     const probe = store.getState().channels[channelId]?.probe;
-    const proto = firstOkProtocol(probe);
+    const proto = pickMainProtocol(probe, ch.models.length > 0);
     if (!proto) {
       await finishTask(store, channelId, 'probe_first');
       return;

@@ -125,6 +125,7 @@ export interface ProbeAllOpts {
   apiKey: string;
   insecure?: boolean;
   timeoutMs?: number;
+  model?: string; // 目录非空时传目录首模型 id，否则用占位模型
 }
 
 export async function probeAll(opts: ProbeAllOpts): Promise<Record<string, ProbeResult>> {
@@ -153,4 +154,14 @@ export function firstOkProtocol(probe: Record<string, ProbeResult> | undefined):
     if (probe[proto]?.cls === 'ok') return proto;
   }
   return null;
+}
+
+/** 主协议判定（矩阵前置）：探测存在 ok 协议 → 取第一个；无 ok 但渠道目录非空 → 兜底 openai；否则 null（拒绝启动）。 */
+export function pickMainProtocol(
+  probe: Record<string, ProbeResult> | undefined,
+  hasCatalog: boolean,
+): Protocol | null {
+  const ok = firstOkProtocol(probe);
+  if (ok) return ok;
+  return hasCatalog ? 'openai' : null;
 }

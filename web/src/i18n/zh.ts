@@ -84,7 +84,7 @@ const zh = {
   'matrix.sec': '秒',
   'matrix.noModel': '请先在模型目录中勾选至少一个模型',
   'matrix.noKey': '请先启用至少一个密钥',
-  'matrix.probeFirst': '请先执行协议探测，至少一个协议探测为可用后才能启动矩阵',
+  'matrix.probeFirst': '请先执行协议探测或拉取模型目录，探测存在可用协议或目录非空后才能启动矩阵',
   'matrix.failed': '矩阵测试失败：',
   'matrix.progress': '进度：{{n}} / {{total}}',
   'matrix.selectAvailable': '只选可用',

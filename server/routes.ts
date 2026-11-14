@@ -5,7 +5,7 @@ import type { Store, Channel, ChannelKey, ChannelState, ProbeResult } from './st
 import { mask } from './mask.js';
 import { acquireTask, getTask, runProbe, runCatalog, stopAllTestTasks } from './tasks.js';
 import { runTest } from './runner.js';
-import { firstOkProtocol } from './probe.js';
+import { pickMainProtocol } from './probe.js';
 
 // ---------- zod schemas ----------
 
@@ -342,8 +342,8 @@ export function createRouter(store: Store): Router {
   r.post('/channels/:id/test', (req, res) => {
     const ch = findChannel(store, req.params.id);
     const body = testStartSchema.parse(req.body ?? {});
-    // 主协议 = 探测 ok 的第一个协议；全部非 ok 时拒绝启动并报「先探测」
-    if (!firstOkProtocol(store.getState().channels[ch.id]?.probe)) {
+    // 主协议 = 探测 ok 的第一个；无 ok 但目录非空时兜底 openai
+    if (!pickMainProtocol(store.getState().channels[ch.id]?.probe, ch.models.length > 0)) {
       throw new HttpError(409, 'probe_first');
     }
     const task = acquireTask(ch.id, 'test', 0);

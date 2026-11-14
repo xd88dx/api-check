@@ -1,7 +1,8 @@
 // probe.ts 测试：C1 五分类 + C2 URL 归一化（ACCEPTANCE）
 import { describe, it, expect, afterAll } from 'vitest';
-import { buildProbeUrl, probeAll, firstOkProtocol, type Protocol } from './probe.js';
+import { buildProbeUrl, probeAll, firstOkProtocol, pickMainProtocol, type Protocol } from './probe.js';
 import { startMock, type MockUpstream } from './mockupstream.js';
+import type { ProbeResult } from './store.js';
 
 const KEY = 'sk-test-0000abcdefgh';
 const mocks: MockUpstream[] = [];
@@ -144,5 +145,46 @@ describe('firstOkProtocol', () => {
     };
     expect(firstOkProtocol(probe)).toBe('responses');
     expect(firstOkProtocol(undefined)).toBeNull();
+  });
+});
+
+describe('pickMainProtocol（矩阵前置）', () => {
+  const allError: Record<string, ProbeResult> = {
+    openai: { url: '', cls: 'error', latencyMs: 1, httpStatus: 503, rawSnippet: '', at: '' },
+    responses: { url: '', cls: 'error', latencyMs: 1, httpStatus: 503, rawSnippet: '', at: '' },
+    anthropic: { url: '', cls: 'error', latencyMs: 1, httpStatus: 503, rawSnippet: '', at: '' },
+    gemini: { url: '', cls: 'error', latencyMs: 1, httpStatus: 503, rawSnippet: '', at: '' },
+  };
+  it('探测存在 ok → 取第一个 ok 协议', () => {
+    const probe = { ...allError, responses: { url: '', cls: 'ok' as const, latencyMs: 1, httpStatus: 200, rawSnippet: '', at: '' } };
+    expect(pickMainProtocol(probe, false)).toBe('responses');
+  });
+  it('无 ok 但目录非空 → 兜底 openai', () => {
+    expect(pickMainProtocol(allError, true)).toBe('openai');
+  });
+  it('无 ok 且目录为空 → null（拒绝启动）', () => {
+    expect(pickMainProtocol(allError, false)).toBeNull();
+    expect(pickMainProtocol(undefined, false)).toBeNull();
+  });
+});
+
+describe('probeAll 探测模型名（分组限模型源适配）', () => {
+  it('目录非空时 model 参数透传到请求体', async () => {
+    const m = await start((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ choices: [{ message: { content: 'pong' } }] }));
+    });
+    await probeAll({ baseUrl: `${m.baseUrl}/v1`, apiKey: KEY, timeoutMs: 3000, model: 'crowllm-model-1' });
+    const post = m.requests.find((r) => r.url.endsWith('/chat/completions'));
+    expect(JSON.parse(post?.body ?? '{}')).toMatchObject({ model: 'crowllm-model-1' });
+  });
+  it('目录为空时不传 model → 回落到占位 gpt-4o-mini', async () => {
+    const m = await start((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ choices: [{ message: { content: 'pong' } }] }));
+    });
+    await probeAll({ baseUrl: `${m.baseUrl}/v1`, apiKey: KEY, timeoutMs: 3000 });
+    const post = m.requests.find((r) => r.url.endsWith('/chat/completions'));
+    expect(JSON.parse(post?.body ?? '{}')).toMatchObject({ model: 'gpt-4o-mini' });
   });
 });

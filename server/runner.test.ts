@@ -175,12 +175,12 @@ describe('runTest', () => {
     expect(keep).not.toContain('m-auth');
   });
 
-  it('全部协议非 ok（未探测）→ 拒绝启动，报 probe_first', async () => {
+  it('全部协议非 ok 且目录为空 → 拒绝启动，报 probe_first', async () => {
     const m = await start((_req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end('{}');
     });
-    const { store, channelId } = await setupChannel(m, ['m1']);
+    const { store, channelId } = await setupChannel(m, []);
     delete store.getState().channels['c1']!.probe;
     acquireTask(channelId, 'test', 0);
     await runTest(store, channelId, { intervalMs: 0, timeoutMs: 2000 });
@@ -188,6 +188,35 @@ describe('runTest', () => {
     expect(task.running).toBe(false);
     expect(task.error).toBe('probe_first');
     expect(m.requests).toHaveLength(0);
+  });
+
+  it('无探测 ok 但目录非空 → 放行启动，主协议兜底 openai（分组限模型源）', async () => {
+    const m = await start((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(okBody());
+    });
+    const { store, channelId } = await setupChannel(m, ['crowllm-model-1']);
+    // 模拟四协议全 error（占位模型触发 503）但目录非空
+    const now = new Date().toISOString();
+    const probe: Record<string, ProbeResult> = {
+      openai: { url: '', cls: 'error', latencyMs: 1, httpStatus: 503, rawSnippet: '', at: now },
+      responses: { url: '', cls: 'error', latencyMs: 1, httpStatus: 503, rawSnippet: '', at: now },
+      anthropic: { url: '', cls: 'error', latencyMs: 1, httpStatus: 503, rawSnippet: '', at: now },
+      gemini: { url: '', cls: 'error', latencyMs: 1, httpStatus: 503, rawSnippet: '', at: now },
+    };
+    store.getState().channels['c1']!.probe = probe;
+    acquireTask(channelId, 'test', 0);
+    await runTest(store, channelId, { intervalMs: 0, timeoutMs: 2000 });
+    const task = getTask(channelId)!;
+    expect(task.running).toBe(false);
+    expect(task.error).toBeUndefined();
+    // 主协议为 openai：请求打到 /chat/completions
+    expect(m.requests).toHaveLength(2); // 1 model × 2 keys
+    for (const r of m.requests) {
+      expect(r.url).toContain('/chat/completions');
+    }
+    const cell = store.getState().channels['c1']!.results!['crowllm-model-1']!['k1']!;
+    expect(cell.cls).toBe('ok');
   });
 
   it('D7 互斥：矩阵运行中再占用 probe/catalog/test 一律被拒（routes 映射 409）', async () => {

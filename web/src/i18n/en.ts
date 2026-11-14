@@ -87,7 +87,7 @@ const en: Dict = {
   'matrix.sec': 's',
   'matrix.noModel': 'Select at least one model in the catalog first.',
   'matrix.noKey': 'Enable at least one key first.',
-  'matrix.probeFirst': 'Run protocol probe first; at least one protocol must be OK before matrix.',
+  'matrix.probeFirst': 'Run protocol probe or fetch the model catalog first; matrix requires an OK protocol or a non-empty catalog.',
   'matrix.failed': 'Matrix test failed: ',
   'matrix.progress': 'Progress: {{n}} / {{total}}',
   'matrix.selectAvailable': 'Keep only available',
