@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { json as expressJson, Router, type Request, type Response, type NextFunction } from 'express';
 import { z, ZodError } from 'zod';
-import type { Store, Channel, ChannelKey } from './store';
-import { mask } from './mask';
+import type { Store, Channel, ChannelKey } from './store.js';
+import { mask } from './mask.js';
 
 // ---------- zod schemas ----------
 

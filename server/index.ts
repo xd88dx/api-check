@@ -2,9 +2,9 @@ import express from 'express';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
-import { Store } from './store';
-import { createRouter, errorHandler } from './routes';
-import { logger } from './logger';
+import { Store } from './store.js';
+import { createRouter, errorHandler } from './routes.js';
+import { logger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

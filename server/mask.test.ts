@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mask, maskKeyInRecord } from './mask';
+import { mask, maskKeyInRecord } from './mask.js';
 
 describe('mask', () => {
   it('长度 >= 12：前5 + … + 后5', () => {
