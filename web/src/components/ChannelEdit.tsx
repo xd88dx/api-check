@@ -1,0 +1,118 @@
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { api, ApiError } from '../api';
+import type { PublicChannel } from '../types';
+import KeyPanel from './KeyPanel';
+
+interface Props {
+  channel: PublicChannel | null; // null = 新建
+  onSaved: (id: string) => void | Promise<void>;
+  onBack: () => void;
+  onError: (msg: string) => void;
+}
+
+function firstIssueMessage(err: unknown): string | null {
+  if (err instanceof ApiError && err.body.issues && err.body.issues.length > 0) {
+    const i = err.body.issues[0];
+    return `${i.path}: ${i.message}`;
+  }
+  return null;
+}
+
+export default function ChannelEdit({ channel, onSaved, onBack, onError }: Props) {
+  const { t } = useTranslation();
+  const isNew = channel === null;
+  const [name, setName] = useState(channel?.name ?? '');
+  const [baseUrl, setBaseUrl] = useState(channel?.baseUrl ?? '');
+  const [insecure, setInsecure] = useState(channel?.insecure ?? false);
+  const [enabled, setEnabled] = useState(channel?.enabled ?? true);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      if (isNew) {
+        const { channel: created } = await api.createChannel({
+          name,
+          baseUrl,
+          insecure,
+        });
+        await onSaved(created.id);
+      } else {
+        await api.updateChannel(channel.id, { name, baseUrl, insecure, enabled });
+        await onSaved(channel.id);
+      }
+      setFieldError(null);
+    } catch (err) {
+      const issue = firstIssueMessage(err);
+      onError(issue ? `${t('error.validation')} ${issue}` : t('error.save'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <main className="content">
+      <div className="content-head">
+        <h2>{isNew ? t('channel.new') : t('channel.edit')}</h2>
+        <button type="button" className="link" onClick={onBack}>
+          {t('channel.back')}
+        </button>
+      </div>
+      <form
+        className="form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <label>
+          <span>{t('channel.name')}</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t('channel.namePlaceholder')}
+            required
+          />
+        </label>
+        <label>
+          <span>{t('channel.baseUrl')}</span>
+          <input
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder={t('channel.baseUrlPlaceholder')}
+            required
+            className="mono"
+          />
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={insecure}
+            onChange={(e) => setInsecure(e.target.checked)}
+          />
+          <span>{t('channel.insecure')}</span>
+        </label>
+        {insecure && <p className="warn">{t('channel.insecureHint')}</p>}
+        {!isNew && (
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+            />
+            <span>{t('channel.enabled')}</span>
+          </label>
+        )}
+        <div className="actions">
+          <button type="submit" disabled={saving}>
+            {t('channel.save')}
+          </button>
+        </div>
+        {fieldError && <p className="error">{fieldError}</p>}
+      </form>
+      {!isNew && channel && <KeyPanel channel={channel} onError={onError} />}
+    </main>
+  );
+}

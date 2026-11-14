@@ -1,0 +1,50 @@
+const zh = {
+  'app.title': '上游渠道可用性管理面板',
+  'app.lang': '语言',
+
+  'channel.title': '渠道列表',
+  'channel.add': '新建渠道',
+  'channel.edit': '编辑渠道',
+  'channel.back': '返回列表',
+  'channel.name': '名称',
+  'channel.namePlaceholder': '渠道名称',
+  'channel.baseUrl': 'Base URL',
+  'channel.baseUrlPlaceholder': 'https://example.com/v1',
+  'channel.insecure': '忽略证书校验',
+  'channel.insecureHint': '仅对该渠道的探测/目录/测试请求生效（自签证书场景）',
+  'channel.enabled': '启用',
+  'channel.createdAt': '创建于',
+  'channel.keysCount': '密钥数',
+  'channel.save': '保存',
+  'channel.delete': '删除',
+  'channel.deleteConfirm': '删除后不可恢复，确定删除渠道「{{name}}」？',
+  'channel.empty': '暂无渠道，点击右上角「新建渠道」开始',
+  'channel.new': '新建渠道',
+
+  'key.title': '密钥管理',
+  'key.add': '添加密钥',
+  'key.label': '备注',
+  'key.labelPlaceholder': '备注名',
+  'key.key': '密钥',
+  'key.enabled': '启用',
+  'key.concurrency': '并发',
+  'key.delete': '删除',
+  'key.save': '保存密钥',
+  'key.keepHint': '留空则不修改',
+  'key.empty': '暂无密钥，点击「添加密钥」',
+  'key.newKeyEmpty': '新增密钥的内容不能为空',
+
+  'common.confirm': '确认',
+  'common.cancel': '取消',
+  'common.loading': '加载中…',
+  'common.retry': '重试',
+  'common.yes': '是',
+  'common.no': '否',
+
+  'error.load': '加载失败，请刷新重试',
+  'error.save': '保存失败，请稍后重试',
+  'error.validation': '字段校验失败：',
+};
+
+export default zh;
+export type Dict = typeof zh;

@@ -1,0 +1,28 @@
+{
+  "name": "api-check",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "上游渠道可用性管理面板（M1 骨架）",
+  "scripts": {
+    "build:server": "tsc -p tsconfig.json",
+    "build:web": "pnpm --filter web build",
+    "build": "pnpm build:server && pnpm build:web",
+    "typecheck": "tsc --noEmit -p tsconfig.json && pnpm --filter web typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx watch server/index.ts",
+    "start": "node server/dist/index.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

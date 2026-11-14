@@ -1,0 +1,182 @@
+import { mkdir, readFile, readdir, rename, open, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
+
+// ---------- 数据模型（SPEC §5） ----------
+
+export interface ChannelKey {
+  id: string;
+  label: string;
+  key: string; // 明文，只存在于 config 文件与内存
+  enabled: boolean;
+  concurrency: number; // 默认 1
+  createdAt: string;
+}
+
+export type ModelSource = 'catalog' | 'manual';
+
+export interface ChannelModel {
+  id: string;
+  selected: boolean;
+  source: ModelSource;
+  contextHint?: string;
+}
+
+export interface Channel {
+  id: string;
+  name: string;
+  baseUrl: string;
+  insecure: boolean;
+  enabled: boolean;
+  createdAt: string;
+  keys: ChannelKey[];
+  models: ChannelModel[];
+}
+
+export interface TestDefaults {
+  intervalMs: number; // 默认 1000
+  timeoutMs: number; // 默认 60000
+}
+
+export interface ChannelsConfig {
+  channels: Channel[];
+  testDefaults: TestDefaults;
+}
+
+export type Cls = 'ok' | 'unsupported' | 'auth' | 'rate_limited' | 'timeout' | 'error';
+
+export interface ProbeResult {
+  url: string;
+  cls: Cls;
+  latencyMs: number;
+  httpStatus: number | null;
+  rawSnippet: string;
+  at: string;
+}
+
+export interface CellResult {
+  cls: Cls;
+  latencyMs: number;
+  httpStatus: number | null;
+  rawSnippet: string;
+  at: string;
+}
+
+export interface TaskSnapshot {
+  running: boolean;
+  stopped: boolean;
+  currentIndex: number;
+  total: number;
+}
+
+export interface ChannelState {
+  probe?: Record<string, ProbeResult>;
+  catalogAt?: string;
+  lastTestAt?: string;
+  results?: Record<string, Record<string, CellResult>>;
+  task?: TaskSnapshot;
+}
+
+export interface ChannelsState {
+  channels: Record<string, ChannelState>;
+}
+
+// ---------- 默认值 ----------
+
+export function defaultConfig(): ChannelsConfig {
+  return {
+    channels: [],
+    testDefaults: { intervalMs: 1000, timeoutMs: 60000 },
+  };
+}
+
+export function defaultState(): ChannelsState {
+  return { channels: {} };
+}
+
+// ---------- 原子写 ----------
+
+/** tmp + rename，写前 fsync，串行队列防并发交错 */
+async function atomicWriteFile(file: string, content: string): Promise<void> {
+  const tmp = `${file}.tmp`;
+  const fh = await open(tmp, 'w');
+  try {
+    await fh.write(content, null, 'utf8');
+    await fh.sync();
+  } finally {
+    await fh.close();
+  }
+  await rename(tmp, file);
+}
+
+/** 清理上次崩溃可能遗留的 .tmp 文件 */
+async function cleanTmpFiles(dir: string): Promise<void> {
+  try {
+    const names = await readdir(dir);
+    await Promise.all(
+      names.filter((n) => n.endsWith('.tmp')).map((n) => unlink(join(dir, n))),
+    );
+  } catch {
+    // 目录不存在则无需清理
+  }
+}
+
+// ---------- Store ----------
+
+export class Store {
+  readonly dataDir: string;
+  private configPath: string;
+  private statePath: string;
+  private config: ChannelsConfig;
+  private state: ChannelsState;
+  private configQueue: Promise<void> = Promise.resolve();
+  private stateQueue: Promise<void> = Promise.resolve();
+
+  constructor(dataDir = 'data') {
+    this.dataDir = dataDir;
+    this.configPath = join(dataDir, 'channels-config.json');
+    this.statePath = join(dataDir, 'channels-state.json');
+    this.config = defaultConfig();
+    this.state = defaultState();
+  }
+
+  /** 启动全量恢复；文件缺失/损坏时用默认值 */
+  async init(): Promise<void> {
+    await mkdir(this.dataDir, { recursive: true });
+    await cleanTmpFiles(this.dataDir);
+    this.config = await this.loadJson(this.configPath, defaultConfig());
+    this.state = await this.loadJson(this.statePath, defaultState());
+  }
+
+  private async loadJson<T>(file: string, fallback: T): Promise<T> {
+    try {
+      const raw = await readFile(file, 'utf8');
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  }
+
+  getConfig(): ChannelsConfig {
+    return this.config;
+  }
+
+  getState(): ChannelsState {
+    return this.state;
+  }
+
+  /** 原子落盘 config；并发调用串行化 */
+  saveConfig(): Promise<void> {
+    this.configQueue = this.configQueue.then(() =>
+      atomicWriteFile(this.configPath, JSON.stringify(this.config, null, 2)),
+    );
+    return this.configQueue;
+  }
+
+  /** 原子落盘 state；并发调用串行化 */
+  saveState(): Promise<void> {
+    this.stateQueue = this.stateQueue.then(() =>
+      atomicWriteFile(this.statePath, JSON.stringify(this.state, null, 2)),
+    );
+    return this.stateQueue;
+  }
+}
