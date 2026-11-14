@@ -115,7 +115,13 @@ export default function ChannelEdit({ channel, onSaved, onBack, onError, onRefre
         </div>
         {fieldError && <p className="error">{fieldError}</p>}
       </form>
-      {!isNew && channel && <KeyPanel channel={channel} onError={onError} />}
+      {!isNew && channel && (
+        <>
+          <KeyPanel channel={channel} onError={onError} />
+          <ProbePanel channel={channel} onError={onError} onRefresh={onRefresh} />
+          <CatalogPanel channel={channel} onError={onError} onRefresh={onRefresh} />
+        </>
+      )}
     </main>
   );
 }

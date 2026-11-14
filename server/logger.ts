@@ -1,5 +1,4 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
 
 const LOG_DIR = 'data/logs';
 const LOG_FILE = `${LOG_DIR}/start.log`;

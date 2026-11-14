@@ -45,7 +45,7 @@ describe('buildProbeUrl（C2 三形态）', () => {
 
 describe('probeAll 分类（C1 五分类各一例）', () => {
   it('2xx 含回复迹象 → ok', async () => {
-    const m = await start((req, res) => {
+    const m = await start((_req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ choices: [{ message: { content: 'pong' } }] }));
     });
@@ -56,7 +56,7 @@ describe('probeAll 分类（C1 五分类各一例）', () => {
   });
 
   it('404 → unsupported', async () => {
-    const m = await start((req, res) => {
+    const m = await start((_req, res) => {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: { message: 'MOCK_UPSTREAM_404_NOT_FOUND' } }));
     });
@@ -67,7 +67,7 @@ describe('probeAll 分类（C1 五分类各一例）', () => {
   });
 
   it('401 → auth', async () => {
-    const m = await start((req, res) => {
+    const m = await start((_req, res) => {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: { message: 'MOCK_UPSTREAM_INVALID_KEY' } }));
     });
@@ -77,7 +77,7 @@ describe('probeAll 分类（C1 五分类各一例）', () => {
   });
 
   it('429 → rate_limited', async () => {
-    const m = await start((req, res) => {
+    const m = await start((_req, res) => {
       res.writeHead(429, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: { message: 'MOCK_UPSTREAM_RATE_LIMIT' } }));
     });
@@ -97,7 +97,7 @@ describe('probeAll 分类（C1 五分类各一例）', () => {
   });
 
   it('5xx → error', async () => {
-    const m = await start((req, res) => {
+    const m = await start((_req, res) => {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end('MOCK_UPSTREAM_INTERNAL_ERROR');
     });

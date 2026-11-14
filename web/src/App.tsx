@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, ApiError } from './api';
+import { api } from './api';
 import type { PublicChannel } from './types';
 import ChannelList from './components/ChannelList';
 import ChannelEdit from './components/ChannelEdit';

@@ -27,7 +27,7 @@ const fiveModels = {
 
 describe('fetchCatalog（C4）', () => {
   it('成功：返回 5 模型，带 contextHint 的字段保留', async () => {
-    const m = await start((req, res) => {
+    const m = await start((_req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(fiveModels));
     });
@@ -42,7 +42,7 @@ describe('fetchCatalog（C4）', () => {
   });
 
   it('空目录：明确报错（ok=false），不是假成功', async () => {
-    const m = await start((req, res) => {
+    const m = await start((_req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ data: [] }));
     });
@@ -52,7 +52,7 @@ describe('fetchCatalog（C4）', () => {
   });
 
   it('失败（401）：报错而非清空', async () => {
-    const m = await start((req, res) => {
+    const m = await start((_req, res) => {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end('{"error":{"message":"MOCK_CATALOG_AUTH_FAIL"}}');
     });
