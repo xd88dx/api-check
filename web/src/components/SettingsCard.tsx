@@ -86,7 +86,9 @@ export default function SettingsCard({ authRequired }: Props) {
       )}
 
       <section className="key-panel">
-        <h3>{t('gist.title')}</h3>
+        <div className="content-head">
+          <h3>{t('gist.title')}</h3>
+        </div>
         <p className="gist-hint">{t('gist.hint')}</p>
 
         <div className="form-row">

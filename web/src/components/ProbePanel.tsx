@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
 import type { PublicChannel, PublicProbeResult, TaskState, Cls } from '../types';
+import EmptyState from './EmptyState';
 
 interface Props {
   channel: PublicChannel;
@@ -92,6 +93,7 @@ export default function ProbePanel({ channel, onError, onRefresh }: Props) {
       <div className="content-head">
         <h3>{t('probe.title')}</h3>
         <button type="button" className="primary" disabled={running} onClick={() => void run()}>
+          {running && <span className="spinner" aria-hidden="true" />}
           {running ? t('probe.running') : t('probe.run')}
         </button>
       </div>
@@ -128,7 +130,7 @@ export default function ProbePanel({ channel, onError, onRefresh }: Props) {
           </div>
         );
       })}
-      {!probe && !running && <p className="empty">{t('probe.noResult')}</p>}
+      {!probe && !running && <EmptyState text={t('probe.noResult')} />}
     </section>
   );
 }

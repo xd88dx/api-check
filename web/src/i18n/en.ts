@@ -1,7 +1,7 @@
 import type { Dict } from './zh';
 
 const en: Dict = {
-  'app.title': 'Upstream Channel Availability Panel',
+  'app.title': 'Channel Availability Testing Platform',
   'app.lang': 'Language',
 
   'channel.title': 'Channels',
@@ -15,6 +15,8 @@ const en: Dict = {
   'channel.insecure': 'Skip TLS verification',
   'channel.insecureHint': 'Applies to probe/catalog/test requests of this channel only (self-signed certs)',
   'channel.enabled': 'Enabled',
+  'channel.statusOn': 'Active',
+  'channel.statusOff': 'Disabled',
   'channel.keysCount': 'Keys',
   'channel.save': 'Save',
   'channel.delete': 'Delete',
@@ -44,8 +46,6 @@ const en: Dict = {
   'common.confirm': 'Confirm',
   'common.cancel': 'Cancel',
   'common.loading': 'Loading…',
-  'common.yes': 'Yes',
-  'common.no': 'No',
   'common.copied': 'Copied',
 
   'login.title': 'Sign in required',
@@ -99,6 +99,7 @@ const en: Dict = {
   'catalog.copyFailed': 'Failed to copy model id',
 
   'matrix.title': 'Matrix Test',
+  'matrix.legend': 'Legend',
   'matrix.run': 'Run test',
   'matrix.stop': 'Stop',
   'matrix.model': 'Model / Key',
@@ -132,8 +133,8 @@ const en: Dict = {
   'matrix.cls.timeout': 'Timeout',
   'matrix.cls.error': 'Error',
 
-  'settings.title': 'Settings',
-  'settings.refresh': 'Refresh',
+  'settings.title': 'Sync settings',
+  'settings.refresh': 'Refresh status',
   'settings.noPasswordWarn':
     'No access password is set; anyone who knows the URL can access this panel. Set PANEL_PASSWORD via environment variable.',
 

@@ -1,5 +1,5 @@
 const zh = {
-  'app.title': '上游渠道可用性管理面板',
+  'app.title': '渠道可用性检测平台',
   'app.lang': '语言',
 
   'channel.title': '渠道列表',
@@ -13,6 +13,8 @@ const zh = {
   'channel.insecure': '忽略证书校验',
   'channel.insecureHint': '仅对该渠道的探测/目录/测试请求生效（自签证书场景）',
   'channel.enabled': '启用',
+  'channel.statusOn': '已启用',
+  'channel.statusOff': '已停用',
   'channel.keysCount': '密钥数',
   'channel.save': '保存',
   'channel.delete': '删除',
@@ -41,8 +43,6 @@ const zh = {
   'common.confirm': '确认',
   'common.cancel': '取消',
   'common.loading': '加载中…',
-  'common.yes': '是',
-  'common.no': '否',
   'common.copied': '已复制',
 
   'login.title': '需要登录',
@@ -96,6 +96,7 @@ const zh = {
   'catalog.copyFailed': '复制模型名失败',
 
   'matrix.title': '矩阵测试',
+  'matrix.legend': '图例',
   'matrix.run': '开始测试',
   'matrix.stop': '停止',
   'matrix.model': '模型 / 密钥',
@@ -129,8 +130,8 @@ const zh = {
   'matrix.cls.timeout': '超时',
   'matrix.cls.error': '错误',
 
-  'settings.title': '设置',
-  'settings.refresh': '刷新',
+  'settings.title': '同步设置',
+  'settings.refresh': '刷新状态',
   'settings.noPasswordWarn': '当前未设置访问密码，面板可被任意访问。建议通过环境变量 PANEL_PASSWORD 设置访问密码。',
 
   'gist.title': 'Gist 同步',

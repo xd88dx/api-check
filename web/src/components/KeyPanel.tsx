@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
 import type { KeyInput, PublicChannel, PublicKey } from '../types';
-import { CopyIcon, EyeIcon, EyeOffIcon } from './icons';
+import EmptyState from './EmptyState';
+import { CopyIcon, EyeIcon, EyeOffIcon, TrashIcon } from './icons';
 
 interface Row {
   id?: string;
@@ -134,8 +135,9 @@ export default function KeyPanel({ channel, onError }: Props) {
         </div>
       </div>
       {rows.length === 0 ? (
-        <p className="empty">{t('key.empty')}</p>
+        <EmptyState text={t('key.empty')} />
       ) : (
+        <div className="table-wrap">
         <table className="key-table">
           <thead>
             <tr>
@@ -143,7 +145,7 @@ export default function KeyPanel({ channel, onError }: Props) {
               <th>{t('key.key')}</th>
               <th>{t('key.enabled')}</th>
               <th>{t('key.concurrency')}</th>
-              <th></th>
+              <th className="col-ops" />
             </tr>
           </thead>
           <tbody>
@@ -220,19 +222,22 @@ export default function KeyPanel({ channel, onError }: Props) {
                     }
                   />
                 </td>
-                <td>
+                <td className="col-ops">
                   <button
                     type="button"
-                    className="danger"
+                    className="icon-btn danger"
+                    title={t('key.delete')}
+                    aria-label={t('key.delete')}
                     onClick={() => removeRow(idx)}
                   >
-                    {t('key.delete')}
+                    <TrashIcon />
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       )}
       <div className="actions">
         <button type="button" className="primary" disabled={saving} onClick={() => void save()}>

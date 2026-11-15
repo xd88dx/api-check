@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
 import type { PublicChannel, TaskState } from '../types';
+import EmptyState from './EmptyState';
 import { CopyIcon } from './icons';
 
 interface Props {
@@ -142,6 +143,7 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
           <button type="button" className="ghost" onClick={() => void selectAll()}>{t('catalog.selectAll')}</button>
           <button type="button" className="ghost" onClick={() => void selectNone()}>{t('catalog.selectNone')}</button>
           <button type="button" className="primary" disabled={running} onClick={() => void refresh()}>
+            {running && <span className="spinner" aria-hidden="true" />}
             {running ? t('catalog.refreshing') : t('catalog.refresh')}
           </button>
         </div>
@@ -180,9 +182,9 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
         />
       </div>
       {channel.models.length === 0 ? (
-        <p className="empty">{t('catalog.empty')}</p>
+        <EmptyState text={t('catalog.empty')} />
       ) : visibleModels.length === 0 ? (
-        <p className="empty">{t('catalog.noMatch')}</p>
+        <EmptyState text={t('catalog.noMatch')} />
       ) : (
         <div className="chips">
           {visibleModels.map((m) => (

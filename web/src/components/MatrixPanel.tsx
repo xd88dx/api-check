@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
 import type { PublicChannel, CellResult, TaskState, Cls } from '../types';
+import EmptyState from './EmptyState';
 
 interface Props {
   channel: PublicChannel;
@@ -188,9 +189,15 @@ export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs,
       </div>
 
       {running && task && (
-        <p className="matrix-progress">
-          {t('matrix.progress', { n: progress.idx + 1, total: progress.total })}
-        </p>
+        <div className="matrix-progress">
+          <span>{t('matrix.progress', { n: progress.idx + 1, total: progress.total })}</span>
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{ width: `${progress.total ? (progress.idx / progress.total) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
       )}
       {lastError && (
         <p className="error">
@@ -203,8 +210,11 @@ export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs,
                 : `${t('matrix.failed')}${lastError}`}
         </p>
       )}
-      {selectedModels.length === 0 && <p className="empty">{t('matrix.noModel')}</p>}
-      {enabledKeys.length === 0 && <p className="empty">{t('matrix.noKey')}</p>}
+      {selectedModels.length === 0 ? (
+        <EmptyState text={t('matrix.noModel')} />
+      ) : enabledKeys.length === 0 ? (
+        <EmptyState text={t('matrix.noKey')} />
+      ) : null}
       <div className="matrix-controls">
         <label className="matrix-repeat">
           <span>{t('matrix.repeat')}</span>
@@ -230,6 +240,15 @@ export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs,
           />
           <span className="matrix-repeat-hint">{t('matrix.intervalHint')}</span>
         </label>
+      </div>
+
+      <div className="matrix-legend">
+        <span className="matrix-legend-label">{t('matrix.legend')}</span>
+        {(['ok', 'rate_limited', 'timeout', 'unsupported', 'error'] as Cls[]).map((c) => (
+          <span key={c} className={`cls-badge cls-${CLS_COLORS[c]}`}>
+            {t(`matrix.cls.${c}`)}
+          </span>
+        ))}
       </div>
 
       {diffOpen && (

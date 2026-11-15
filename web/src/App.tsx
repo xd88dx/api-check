@@ -8,6 +8,7 @@ import LangSwitcher from './components/LangSwitcher';
 import ConfirmDialog from './components/ConfirmDialog';
 import LoginModal from './components/LoginModal';
 import SettingsCard from './components/SettingsCard';
+import { BrandIcon } from './components/icons';
 
 type View = { mode: 'list' } | { mode: 'edit'; id: string | null };
 
@@ -89,11 +90,20 @@ export default function App() {
       : null;
 
   return (
-    <div className="app">
+    <>
       <header className="topbar">
-        <h1>{t('app.title')}</h1>
-        <LangSwitcher />
+        <div className="topbar-inner">
+          <h1 className="brand">
+            <span className="brand-mark">
+              <BrandIcon />
+            </span>
+            api-check
+            <small>{t('app.title')}</small>
+          </h1>
+          <LangSwitcher />
+        </div>
       </header>
+      <div className="app">
       {error && (
         <div className="error-banner" role="alert">
           {error}
@@ -113,7 +123,7 @@ export default function App() {
         </>
       ) : channels === null ? (
         // hash 恢复编辑视图时等数据就绪再挂载编辑页，避免按「新建」初始化后不回填
-        <p className="loading-hint">{t('common.loading')}</p>
+        <p className="loading-hint"><span className="spinner" aria-hidden="true" />{t('common.loading')}</p>
       ) : (
         <ChannelEdit
           channel={editingChannel}
@@ -135,6 +145,7 @@ export default function App() {
         onCancel={() => setPendingDelete(null)}
       />
       <LoginModal open={loginOpen} onSuccess={() => setLoginOpen(false)} />
-    </div>
+      </div>
+    </>
   );
 }

@@ -1,0 +1,177 @@
+/* 体验细节层:骨架屏 / 空状态 / 胶囊 / 进度条 / 图例 */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 40px 16px;
+  color: var(--muted);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-tint);
+}
+.empty-state-icon { color: #b9c2cf; line-height: 0; }
+.empty-state-text { margin: 2px 0 0; font-size: 13px; }
+.empty-state-hint { font-size: 12px; color: var(--muted); }
+
+.skeleton-list { display: flex; flex-direction: column; gap: 10px; }
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
+}
+.skeleton {
+  display: block;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, #eef1f6 25%, #e3e8f1 37%, #eef1f6 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+.skeleton-title { width: 22%; height: 12px; }
+.skeleton-sub { width: 38%; }
+.skeleton-pill { width: 56px; margin-left: auto; }
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  opacity: 0.85;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.status-pill.on { background: var(--ok-soft); color: var(--ok); }
+.status-pill.off { background: var(--muted-soft); color: var(--muted); }
+
+.count-pill {
+  display: inline-block;
+  min-width: 24px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--muted-soft);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.row-name { display: block; font-size: 14px; }
+.row-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 520px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.col-ops { width: 56px; text-align: right !important; }
+.channel-table td.col-ops, .key-table td.col-ops { padding-right: 12px; }
+
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-m);
+  -webkit-overflow-scrolling: touch;
+}
+.table-wrap > table { margin-bottom: 0; }
+.table-wrap + .actions { margin-top: var(--sp-4); }
+
+.matrix-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.progress-track {
+  flex: 1;
+  max-width: 420px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--muted-soft);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.3s var(--ease);
+}
+
+.matrix-legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+.matrix-legend-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+* { scrollbar-width: thin; scrollbar-color: #c8d1de transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: #c8d1de;
+  border: 2px solid transparent;
+  border-radius: var(--radius-s);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: #aab6c8; }
+
+@media (max-width: 768px) {
+  .skeleton-sub { display: none; }
+  .row-sub { max-width: 62vw; }
+  .empty-state { padding: 32px 12px; }
+  .matrix-legend { display: none; }
+  .channel-table { min-width: 520px; }
+  .key-table { min-width: 720px; }
+  .matrix-table { min-width: 560px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .spinner,
+  .matrix-cell-current::after,
+  .modal,
+  .modal-backdrop { animation: none; }
+}
