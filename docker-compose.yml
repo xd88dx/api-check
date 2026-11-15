@@ -1,0 +1,15 @@
+services:
+  api-check:
+    build: .
+    image: api-check:latest
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${PROXY_PORT:-3000}:3000"
+    environment:
+      # 可选：设置后面板 /api/* 需 x-auth 头（前端会弹出登录框）；不设则本地裸奔
+      PANEL_PASSWORD: ${PANEL_PASSWORD:-}
+      PORT: "3000"
+      DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data
