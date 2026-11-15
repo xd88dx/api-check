@@ -30,18 +30,25 @@ export function storePassword(password: string): void {
   }
 }
 
-// 收到 401 → 通知 App 弹登录框；登录成功后唤醒等待中的请求重放
+// 收到 401 → 通知 App 弹登录框；登录成功后唤醒等待中的请求重放。
+// M8：并发 401 多请求各挂各的等待者，notifyLoginSuccess 全部唤醒（单槽会被后到者覆盖导致先到请求挂死）
 let unauthorizedHandler: (() => void) | null = null;
-let loginWaiter: (() => void) | null = null;
+let loginWaiters: Array<() => void> = [];
+// M8：handler 未注册期间到达的 401 记为待处理态，注册后立即触发弹窗
+let pendingUnauthorized = false;
 
 export function onUnauthorized(handler: (() => void) | null): void {
   unauthorizedHandler = handler;
+  if (handler && pendingUnauthorized) {
+    pendingUnauthorized = false;
+    handler();
+  }
 }
 
 export function notifyLoginSuccess(): void {
-  const w = loginWaiter;
-  loginWaiter = null;
-  w?.();
+  const ws = loginWaiters;
+  loginWaiters = [];
+  for (const w of ws) w();
 }
 
 export async function login(password: string): Promise<boolean> {
@@ -65,11 +72,13 @@ async function request<T>(path: string, init?: RequestInit, replay = true): Prom
   if (password) headers['X-Auth'] = password;
   const res = await fetch(`/api${path}`, { ...init, headers: { ...headers, ...(init?.headers ?? {}) } });
   if (res.status === 401) {
-    // 首次 401 → 弹登录框并等成功后重放一次；重放仍 401 → 按错误抛出
-    if (replay && unauthorizedHandler) {
+    // 首次 401 → 弹登录框并等成功后重放一次；重放仍 401 → 按错误抛出。
+    // handler 未注册（注册前的竞态窗口）也等待：记待处理态，注册后由 onUnauthorized 触发弹窗
+    if (replay) {
+      if (!unauthorizedHandler) pendingUnauthorized = true;
       await new Promise<void>((resolve) => {
-        loginWaiter = resolve;
-        unauthorizedHandler!();
+        loginWaiters.push(resolve);
+        unauthorizedHandler?.();
       });
       return request<T>(path, init, false);
     }

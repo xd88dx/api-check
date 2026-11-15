@@ -7,6 +7,7 @@ import ChannelEdit from './components/ChannelEdit';
 import LangSwitcher from './components/LangSwitcher';
 import ConfirmDialog from './components/ConfirmDialog';
 import LoginModal from './components/LoginModal';
+import SettingsCard from './components/SettingsCard';
 
 type View = { mode: 'list' } | { mode: 'edit'; id: string | null };
 
@@ -39,12 +40,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PublicChannel | null>(null);
   const [loginOpen, setLoginOpen] = useState(false);
-
-  // M8 §15.1：401 → 弹登录框；登录成功后 api 内部唤醒 loginWaiter 重放原请求
-  useEffect(() => {
-    onUnauthorized(() => setLoginOpen(true));
-    return () => onUnauthorized(null);
-  }, []);
+  const [authRequired, setAuthRequired] = useState<boolean | null>(null);
 
   // 视图变化写入 hash（replaceState：不产生多余历史记录、不触发滚动）
   useEffect(() => {
@@ -57,17 +53,23 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const { channels: list, testDefaults: td } = await api.listChannels();
+      const { channels: list, testDefaults: td, authRequired: ar } = await api.listChannels();
       setChannels(list);
       setTestDefaults(td);
+      setAuthRequired(ar);
       setError(null);
     } catch {
       setError(t('error.load'));
     }
   }, [t]);
 
+  // M8 §15.1：401 → 弹登录框；登录成功后 api 内部唤醒 loginWaiter 重放原请求。
+  // 竞态修复：同一 effect 内先注册 onUnauthorized、后发首请求，顺序有保证；
+  // 注册前窗口到达的 401 由 api 记待处理态、注册时立即触发
   useEffect(() => {
+    onUnauthorized(() => setLoginOpen(true));
     void refresh();
+    return () => onUnauthorized(null);
   }, [refresh]);
 
   const handleDelete = async () => {
@@ -98,13 +100,17 @@ export default function App() {
         </div>
       )}
       {view.mode === 'list' ? (
-        <ChannelList
-          channels={channels}
-          loading={channels === null}
-          onAdd={() => setView({ mode: 'edit', id: null })}
-          onEdit={(id) => setView({ mode: 'edit', id })}
-          onDelete={(ch) => setPendingDelete(ch)}
-        />
+        <>
+          <ChannelList
+            channels={channels}
+            loading={channels === null}
+            onAdd={() => setView({ mode: 'edit', id: null })}
+            onEdit={(id) => setView({ mode: 'edit', id })}
+            onDelete={(ch) => setPendingDelete(ch)}
+          />
+          {/* M8 §15.3：列表页「设置」区块（Gist 同步 + 未设密码提示） */}
+          <SettingsCard authRequired={authRequired} />
+        </>
       ) : channels === null ? (
         // hash 恢复编辑视图时等数据就绪再挂载编辑页，避免按「新建」初始化后不回填
         <p className="loading-hint">{t('common.loading')}</p>

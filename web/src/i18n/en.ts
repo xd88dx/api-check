@@ -131,6 +131,26 @@ const en: Dict = {
   'matrix.cls.rate_limited': 'Rate limited',
   'matrix.cls.timeout': 'Timeout',
   'matrix.cls.error': 'Error',
+
+  'settings.title': 'Settings',
+  'settings.refresh': 'Refresh',
+  'settings.noPasswordWarn':
+    'No access password is set; anyone who knows the URL can access this panel. Set PANEL_PASSWORD via environment variable.',
+
+  'gist.title': 'Gist Sync',
+  'gist.hint': 'Sync channels/keys/catalog config to a private GitHub Gist (plaintext keys never leave the server).',
+  'gist.token': 'GitHub Token',
+  'gist.tokenKept': 'Saved',
+  'gist.tokenPlaceholder': 'ghp_xxxxxxxx',
+  'gist.gistId': 'Gist ID',
+  'gist.gistIdPlaceholder': 'abcdef... (leave empty to auto-create on push)',
+  'gist.never': 'Not synced yet',
+  'gist.save': 'Save',
+  'gist.push': 'Push',
+  'gist.pull': 'Pull',
+  'gist.sync': 'Sync',
+  'gist.okPush': 'Pushed: ',
+  'gist.okPull': 'Pulled; local config updated.',
 }
 
 export default en;

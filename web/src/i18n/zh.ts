@@ -128,6 +128,25 @@ const zh = {
   'matrix.cls.rate_limited': '限流',
   'matrix.cls.timeout': '超时',
   'matrix.cls.error': '错误',
+
+  'settings.title': '设置',
+  'settings.refresh': '刷新',
+  'settings.noPasswordWarn': '当前未设置访问密码，面板可被任意访问。建议通过环境变量 PANEL_PASSWORD 设置访问密码。',
+
+  'gist.title': 'Gist 同步',
+  'gist.hint': '将渠道/密钥/目录配置同步到 GitHub 私密 Gist（明文密钥不落地）。',
+  'gist.token': 'GitHub Token',
+  'gist.tokenKept': '已保存',
+  'gist.tokenPlaceholder': 'ghp_xxxxxxxx',
+  'gist.gistId': 'Gist ID',
+  'gist.gistIdPlaceholder': 'abcdef...（留空则推送时自动创建）',
+  'gist.never': '尚未同步',
+  'gist.save': '保存',
+  'gist.push': '推送',
+  'gist.pull': '拉取',
+  'gist.sync': '同步',
+  'gist.okPush': '已推送：',
+  'gist.okPull': '已拉取，本地配置已更新。',
 };
 
 export default zh;

@@ -254,6 +254,40 @@ input::placeholder { color: #8b949e; }
   margin-bottom: var(--sp-4);
 }
 
+/* ---------- M8 §15.3：设置卡（列表页） ---------- */
+
+.warning-banner {
+  background: var(--warn-soft);
+  color: var(--warn-fg, var(--warn));
+  border: 1px solid var(--warn-border);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-s);
+  font-size: 13px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-weight: 600;
+}
+.form-row input { width: 100%; }
+
+.form-error { color: var(--danger); font-size: 13px; }
+
+.gist-hint,
+.gist-status {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.gist-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
 /* ---------- 表格：斑马纹 + hover ---------- */
 
 .channel-table, .key-table {
