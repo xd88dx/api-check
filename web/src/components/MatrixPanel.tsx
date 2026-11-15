@@ -136,13 +136,16 @@ export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs,
     await onRefresh();
   };
 
-  const exportChannel = () => {
+  const exportChannel = async () => {
+    const payload = await api.exportChannel(channel.id);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
-    a.href = api.exportChannel(channel.id);
+    a.href = URL.createObjectURL(blob);
     a.download = `api-check-export-${channel.name}-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
   };
 
   const progress = useMemo(() => {
@@ -164,7 +167,7 @@ export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs,
           >
             {t('matrix.selectAvailable')}
           </button>
-          <button type="button" className="ghost" onClick={exportChannel} disabled={running}>
+          <button type="button" className="ghost" onClick={() => void exportChannel()} disabled={running}>
             {t('matrix.export')}
           </button>
           {running ? (

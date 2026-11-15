@@ -48,6 +48,12 @@ const en: Dict = {
   'common.no': 'No',
   'common.copied': 'Copied',
 
+  'login.title': 'Sign in required',
+  'login.hint': 'Enter the access password to continue',
+  'login.placeholder': 'Access password',
+  'login.wrong': 'Wrong password, please retry',
+  'login.submit': 'Sign in',
+
   'error.load': 'Failed to load. Please retry.',
   'error.save': 'Failed to save. Please retry.',
   'error.validation': 'Validation failed: ',

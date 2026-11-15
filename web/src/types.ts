@@ -99,3 +99,12 @@ export interface TestDefaults {
   timeoutMs: number;
   repeat: number;
 }
+
+/** M8：Gist 同步状态（GET /api/gist；token 只回掩码） */
+export interface GistStatus {
+  configured: boolean;
+  tokenMasked: string;
+  gistId: string;
+  syncedAt: number | null;
+  lastResult: string;
+}

@@ -6,6 +6,7 @@ import { mask } from './mask.js';
 import { acquireTask, getTask, runProbe, runCatalog, stopAllTestTasks } from './tasks.js';
 import { runTest } from './runner.js';
 import { pickMainProtocol } from './probe.js';
+import { pushCore, pullCore, syncCore, scheduleMutationSync } from './gistsync.js';
 
 // ---------- zod schemas ----------
 
@@ -71,6 +72,34 @@ const testStartSchema = z.object({
 const probeStartSchema = z.object({
   model: z.string().min(1).max(200).optional(),
 });
+
+const gistConfigSchema = z
+  .object({
+    token: z.string().optional(),
+    gistId: z.string().max(200).optional(),
+  })
+  .refine((v) => v.token !== undefined || v.gistId !== undefined, 'empty body');
+
+// ---------- 认证（M8 §15.1，模式照搬 web-cron：密码即凭据，无 session/token） ----------
+
+/** PANEL_PASSWORD 非空时拦截 /api/*（/api/login 放行）；密码即凭据，比对请求头 x-auth */
+export function authGuard(password: string) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!password) {
+      next();
+      return;
+    }
+    if (req.path === '/login') {
+      next();
+      return;
+    }
+    if (req.headers['x-auth'] !== password) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+    next();
+  };
+}
 
 // ---------- helpers ----------
 
@@ -218,11 +247,22 @@ function replaceKeys(ch: Channel, entries: z.infer<typeof keyEntrySchema>[]): Ch
 
 // ---------- router ----------
 
-export function createRouter(store: Store): Router {
+export function createRouter(store: Store, password = ''): Router {
   const r = Router();
   r.use(expressJson());
+  r.use(authGuard(password));
 
-  // 渠道列表（key 掩码；附带探测/目录状态；附全局测试默认值供前端预填）
+  // 登录：校验密码 → {ok:true}；密码即凭据，不发 session/token
+  r.post('/login', (req, res) => {
+    const body = (req.body ?? {}) as { password?: string };
+    if (String(body.password ?? '') === password) {
+      res.json({ ok: true });
+      return;
+    }
+    res.status(401).json({ error: 'unauthorized' });
+  });
+
+  // 渠道列表（key 掩码；附带探测/目录状态；附全局测试默认值供前端预填；附鉴权启用状态）
   r.get('/channels', (_req, res) => {
     res.json({
       channels: store.getConfig().channels.map((ch) => ({
@@ -230,6 +270,7 @@ export function createRouter(store: Store): Router {
         state: channelStatePublic(store, ch.id),
       })),
       testDefaults: store.getConfig().testDefaults,
+      authRequired: Boolean(password),
     });
   });
 
@@ -249,6 +290,7 @@ export function createRouter(store: Store): Router {
     };
     store.getConfig().channels.push(ch);
     void store.saveConfig();
+    scheduleMutationSync(store);
     res.status(201).json({ channel: toPublicChannel(ch) });
   });
 
@@ -261,6 +303,7 @@ export function createRouter(store: Store): Router {
     if (body.insecure !== undefined) ch.insecure = body.insecure;
     if (body.enabled !== undefined) ch.enabled = body.enabled;
     void store.saveConfig();
+    scheduleMutationSync(store);
     res.json({ channel: toPublicChannel(ch) });
   });
 
@@ -272,6 +315,7 @@ export function createRouter(store: Store): Router {
     delete store.getState().channels[ch.id];
     void store.saveConfig();
     void store.saveState();
+    scheduleMutationSync(store);
     res.json({ ok: true });
   });
 
@@ -281,6 +325,7 @@ export function createRouter(store: Store): Router {
     const body = keysReplaceSchema.parse(req.body);
     ch.keys = replaceKeys(ch, body.keys);
     void store.saveConfig();
+    scheduleMutationSync(store);
     res.json({ channel: toPublicChannel(ch) });
   });
 
@@ -315,6 +360,7 @@ export function createRouter(store: Store): Router {
       }
     }
     void store.saveConfig();
+    scheduleMutationSync(store);
     res.json({ channel: toPublicChannel(ch) });
   });
 
@@ -386,6 +432,7 @@ export function createRouter(store: Store): Router {
       store.getConfig().testDefaults.intervalMs = body.intervalMs;
       void store.saveConfig();
     }
+    scheduleMutationSync(store);
     void runTest(store, ch.id, body);
     res.status(202).json({ task });
   });
@@ -394,6 +441,67 @@ export function createRouter(store: Store): Router {
   r.post('/test/stop', (_req, res) => {
     const n = stopAllTestTasks();
     res.json({ ok: true, stopped: n });
+  });
+
+  // ---- M8：Gist 同步（配置态全量，key 明文进私密 Gist；三方对比决策在 gistsync.ts） ----
+
+  // 配置状态：token 只回掩码，gist_id / 最近同步结果回原文
+  r.get('/gist', (_req, res) => {
+    const g = store.getConfig().gist!;
+    res.json({
+      configured: Boolean(g.token && g.gistId),
+      tokenMasked: g.token ? mask(g.token) : '',
+      gistId: g.gistId,
+      syncedAt: g.syncedAt,
+      lastResult: g.lastResult,
+    });
+  });
+
+  // 保存 token/gist_id；token 留空或掩码形态 = 不改（与 key 编辑同防线）；gist_id 变更时基线作废
+  r.put('/gist', (req, res) => {
+    const body = gistConfigSchema.parse(req.body);
+    const g = store.getConfig().gist!;
+    const nextToken = (body.token ?? '').trim();
+    if (nextToken && nextToken !== g.token && !isMaskShaped(nextToken, g.token)) {
+      g.token = nextToken;
+    }
+    const nextGistId = (body.gistId ?? g.gistId).trim();
+    if (nextGistId !== g.gistId) {
+      g.gistId = nextGistId;
+      g.baselineHash = '';
+    }
+    void store.saveConfig();
+    res.json({ ok: true });
+  });
+
+  // 推送（无 gist_id 时自动创建私密 Gist）
+  r.post('/gist/push', async (_req, res) => {
+    try {
+      const out = await pushCore(store, '手动推送');
+      res.json({ ok: true, action: out.action, gistId: out.gistId ?? '', htmlUrl: out.htmlUrl ?? '' });
+    } catch (e) {
+      res.status(502).json({ error: String((e as Error)?.message ?? e) });
+    }
+  });
+
+  // 拉取：Gist 配置态覆盖本地（state 保留）
+  r.post('/gist/pull', async (_req, res) => {
+    try {
+      const out = await pullCore(store, '手动拉取');
+      res.json({ ok: true, action: out.action, channels: out.channels ?? 0 });
+    } catch (e) {
+      res.status(502).json({ error: String((e as Error)?.message ?? e) });
+    }
+  });
+
+  // 三方对比同步：本地/Gist/基线 → 自动推送/拉取/冲突跳过
+  r.post('/gist/sync', async (_req, res) => {
+    try {
+      const out = await syncCore(store, '手动同步');
+      res.json({ ok: true, action: out.action, ...(out.detail ? { detail: out.detail } : {}) });
+    } catch (e) {
+      res.status(502).json({ error: String((e as Error)?.message ?? e) });
+    }
   });
 
   // ---- M4：导出（渠道信息 + 勾选模型清单 + 最近矩阵结果摘要；不含任何 key 字段） ----
@@ -434,5 +542,6 @@ export function errorHandler(
     res.status(err.status).json({ error: err.message });
     return;
   }
+  console.error('[api] unhandled error at', _req.path, (err as Error)?.stack ?? err);
   res.status(500).json({ error: 'internal_error' });
 }

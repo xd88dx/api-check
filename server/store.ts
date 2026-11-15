@@ -38,9 +38,34 @@ export interface TestDefaults {
   repeat: number; // M7 §14：失败重试次数（总尝试上限）1–10，默认 1
 }
 
+// M8 §15.2：Gist 同步配置；密钥明文随配置态同步（私密 Gist，威胁模型同 web-cron）
+export interface GistConfig {
+  token: string;
+  gistId: string;
+  baselineHash: string;
+  syncedAt: number | null;
+  lastResult: string;
+}
+
+export function defaultGistConfig(): GistConfig {
+  return { token: '', gistId: '', baselineHash: '', syncedAt: null, lastResult: '' };
+}
+
+export function normalizeGistConfig(raw: unknown): GistConfig {
+  const g = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  return {
+    token: String(g.token ?? ''),
+    gistId: String(g.gistId ?? ''),
+    baselineHash: String(g.baselineHash ?? ''),
+    syncedAt: typeof g.syncedAt === 'number' ? g.syncedAt : null,
+    lastResult: String(g.lastResult ?? ''),
+  };
+}
+
 export interface ChannelsConfig {
   channels: Channel[];
   testDefaults: TestDefaults;
+  gist?: GistConfig;
 }
 
 export type Cls = 'ok' | 'unsupported' | 'auth' | 'rate_limited' | 'timeout' | 'error';
@@ -104,6 +129,7 @@ export function defaultConfig(): ChannelsConfig {
   return {
     channels: [],
     testDefaults: { intervalMs: 1000, timeoutMs: 60000, repeat: 1 },
+    gist: defaultGistConfig(),
   };
 }
 
@@ -169,6 +195,8 @@ export class Store {
       timeoutMs: td.timeoutMs ?? 60000,
       repeat: clampRepeat(td.repeat),
     };
+    // M8：Gist 段缺失/损坏时补默认值
+    this.config.gist = normalizeGistConfig(this.config.gist);
     this.state = await this.loadJson(this.statePath, defaultState());
   }
 

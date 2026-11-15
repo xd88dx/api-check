@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { Store } from './store.js';
 import { createRouter, errorHandler } from './routes.js';
+import { startAutoSync, stopAutoSync } from './gistsync.js';
 import { logger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const PANEL_PASSWORD = process.env.PANEL_PASSWORD || '';
 
 async function main() {
   const store = new Store(process.env.DATA_DIR || 'data');
@@ -25,7 +27,8 @@ async function main() {
   if (folded) await store.saveState();
 
   const app = express();
-  app.use('/api', createRouter(store));
+  // M8 §15.1：PANEL_PASSWORD 非空时拦截 /api/*（/api/login 放行）；静态资源与登录框放行
+  app.use('/api', createRouter(store, PANEL_PASSWORD));
   app.use(errorHandler);
 
   // 静态托管 web/dist
@@ -42,7 +45,19 @@ async function main() {
   const port = Number(process.env.PORT) || 3000;
   app.listen(port, () => {
     logger.info(`api-check listening on http://localhost:${port}`);
+    // M8 §15.1：未设密码时提示裸奔风险（本地默认可选）
+    if (!PANEL_PASSWORD) {
+      logger.warn('PANEL_PASSWORD is not set, the panel is exposed without authentication');
+    }
   });
+  // M8 §15.2：Gist 自动同步定时检查（每 5 分钟）
+  startAutoSync(store);
+  const shutdown = () => {
+    stopAutoSync();
+    process.exit(0);
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 main().catch((e) => {

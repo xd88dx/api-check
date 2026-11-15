@@ -88,5 +88,14 @@
 - **I4 UI**：设置标签改「失败重试次数」；格内无连通率形态；标注与 tooltip 双语齐全。
 - **I5 回归**：73 用例中与旧连通率语义冲突的用例按新语义改写，其余零回退；A 组照旧。
 
+## J. M8 专项（权限与 Gist 同步，对照 SPEC §15）
+
+- **J1 权限**：设 PANEL_PASSWORD 后——无 x-auth 访问 /api/channels → 401；带正确 x-auth → 200；/api/login 错密码 → 401、对密码 → ok；静态页与登录框可加载；不设 PANEL_PASSWORD → 全部照旧可访问（本地默认）。
+- **J2 前端登录**：401 → 登录 modal 弹出（双语）；登录成功 → 请求重放成功、刷新页面保持登录态（localStorage）；登出/清 localStorage → 再弹。
+- **J3 Gist push/pull**：配 token+gist_id → push → Gist 上出现 api-check.json 且内容含渠道（含 key 明文）与勾选；改动渠道 → pull → 本地被 Gist 内容覆盖。
+- **J4 三方对比**：本地改（Gist==基线）→ sync 自动推；Gist 改（本地==基线）→ sync 自动拉；两边都改 → 冲突跳过 + 告警信息（mock GitHub API 或真 Gist 一次验证）。
+- **J5 指纹稳定性**：跑一次测试/探测（state 变化）→ 指纹不变（不误判为修改）；改 key 明文 → 指纹变。
+- **J6 回归**：76 用例零回退 + 新增用例；A 组照旧；i18n 双语无裸文本。
+
 
 

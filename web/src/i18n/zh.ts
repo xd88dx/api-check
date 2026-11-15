@@ -45,6 +45,12 @@ const zh = {
   'common.no': '否',
   'common.copied': '已复制',
 
+  'login.title': '需要登录',
+  'login.hint': '请输入访问密码以继续',
+  'login.placeholder': '访问密码',
+  'login.wrong': '密码错误，请重试',
+  'login.submit': '登录',
+
   'error.load': '加载失败，请刷新重试',
   'error.save': '保存失败，请稍后重试',
   'error.validation': '字段校验失败：',

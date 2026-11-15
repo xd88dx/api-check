@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api } from './api';
+import { api, onUnauthorized } from './api';
 import type { PublicChannel, TestDefaults } from './types';
 import ChannelList from './components/ChannelList';
 import ChannelEdit from './components/ChannelEdit';
 import LangSwitcher from './components/LangSwitcher';
 import ConfirmDialog from './components/ConfirmDialog';
+import LoginModal from './components/LoginModal';
 
 type View = { mode: 'list' } | { mode: 'edit'; id: string | null };
 
@@ -37,6 +38,13 @@ export default function App() {
   const [view, setView] = useState<View>(viewFromHash);
   const [error, setError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PublicChannel | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+
+  // M8 §15.1：401 → 弹登录框；登录成功后 api 内部唤醒 loginWaiter 重放原请求
+  useEffect(() => {
+    onUnauthorized(() => setLoginOpen(true));
+    return () => onUnauthorized(null);
+  }, []);
 
   // 视图变化写入 hash（replaceState：不产生多余历史记录、不触发滚动）
   useEffect(() => {
@@ -120,6 +128,7 @@ export default function App() {
         onConfirm={() => void handleDelete()}
         onCancel={() => setPendingDelete(null)}
       />
+      <LoginModal open={loginOpen} onSuccess={() => setLoginOpen(false)} />
     </div>
   );
 }

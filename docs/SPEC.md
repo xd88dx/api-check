@@ -166,6 +166,24 @@ api-check/
 3. **展示**：成功 → 显示成功那一次的真实延迟；经历 ≥1 次重试的格附「重试 N 次后成功」标注（tooltip 含每次明细）；N 次全败 → 显示最后一次失败结果 +「重试 N 次均失败」。原「连通率」形态（2/3 · x%）**移除**。
 4. §12.1 中与连通率/固定 N 次相关的规则由本节取代；色块仍按最终 cls 着色（绿/黄/红/灰）。
 
+## 15. M8 批次：页面权限与 Gist 同步（2026-11-15 用户需求，参考 web-cron 项目）
+
+参考实现：`D:\下载\Github\web-cron\src\`（gistsync.ts / index.ts / ui.ts）——可读参考项目源码，同步算法照搬、结构适配 api-check。
+
+1. **页面权限**（§15.1）：
+   - `PANEL_PASSWORD` 环境变量（空 = 不启用鉴权，本地默认可选）；启动时未设置且监听非环回地址打 WARN。
+   - Express 中间件拦截 `/api/*`（除 `/api/login`）：校验请求头 `x-auth === PANEL_PASSWORD`，不匹配返回 401；静态资源与登录页放行（登录框是前端页面内 modal，模式与 web-cron 一致）。
+   - `POST /api/login` body `{password}` → 校验 → `{ok:true}`（无 session/token，密码即凭据，模式照搬 web-cron）。
+   - 前端：api.ts 每请求带 `X-Auth`（localStorage 存密码）；收到 401 → 弹登录 modal（i18n 双语）；登录成功存 localStorage 并重放请求。
+2. **Gist 同步**（§15.2）：
+   - 同步对象 = 配置态全量（channels 含 key 明文 + models 勾选 + testDefaults）；state（探测/矩阵结果）不同步。私密 Gist，威胁模型与 web-cron 相同（key 明文进私密 Gist）。
+   - 配置端点：`GET/PUT /api/gist`（token/gist_id，PUT 后落盘 config）；动作端点：`POST /api/gist/push`、`POST /api/gist/pull`、`POST /api/gist/sync`（三方对比自动判定推/拉/冲突）。
+   - **三方对比算法照搬 web-cron**：本地指纹 ≠ 基线且 Gist 指纹 == 基线 → 推送；Gist ≠ 基线且本地 == 基线 → 拉取（绝不推）；两边都 ≠ 基线 → 冲突跳过并告警。指纹 = 配置字段 canonical 投影（排除 id/createdAt/at 等易变字段；channels 按 id 排序）。
+   - 基线持久化（config 新段 `gist: { token, gistId, baseline }`）；GITHUB 超时 15s；Gist 文件名 `api-check.json`；UA 标识 `api-check`。
+   - 触发：手动 push/pull/sync 按钮 + 配置变更（渠道/密钥/勾选/设置 PUT 成功）后自动 sync（仅已配置 token+gist_id 时）；定时检查每 5 分钟。自动同步结果（推/拉/冲突/跳过）写日志并在设置卡显示最近一次状态。
+3. **前端设置卡**：渠道列表页新增「设置」区块——Gist 配置（token 掩码显示/gist_id/最近同步状态/推送/拉取/同步三按钮）+ 权限提示（未设密码时提示裸奔风险，双语）。
+4. 新文案走 i18n（zh/en）；不引框架。
+
 
 
 
