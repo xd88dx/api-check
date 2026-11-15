@@ -31,8 +31,11 @@ async function main() {
   app.use('/api', createRouter(store, PANEL_PASSWORD));
   app.use(errorHandler);
 
-  // 静态托管 web/dist
-  const webDist = resolve(__dirname, '..', '..', 'web', 'dist');
+  // 静态托管 web/dist:本地构建在 server/dist,镜像内被扁平化到 /app/dist,两种层级都探测
+  const webDist =
+    [resolve(__dirname, '..', '..', 'web', 'dist'), resolve(__dirname, '..', 'web', 'dist')].find(
+      existsSync,
+    ) ?? resolve(__dirname, '..', '..', 'web', 'dist');
   if (existsSync(webDist)) {
     app.use(express.static(webDist));
     app.get(/^(?!\/api\/).*/, (_req, res) => {
