@@ -34,8 +34,7 @@ jobs:
           node-version: '22'
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
+        # 版本自动读 package.json 的 packageManager 字段（pnpm@10.8.0），不在此重复指定
       - name: Install
         run: pnpm install --frozen-lockfile
       - name: Build
