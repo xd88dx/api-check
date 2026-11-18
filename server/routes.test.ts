@@ -167,3 +167,82 @@ describe('M6 间隔持久化（H5/H6）', () => {
     }
   });
 });
+
+describe('拖动排序(PUT /channels/order)', () => {
+  it('按 ids 重排,未列出的渠道按原顺序补到末尾', async () => {
+    const { store } = await setup();
+    const now = new Date().toISOString();
+    for (const id of ['c2', 'c3']) {
+      store.getConfig().channels.push({
+        id,
+        name: id,
+        baseUrl: 'http://127.0.0.1:9/v1',
+        insecure: false,
+        enabled: true,
+        createdAt: now,
+        keys: [],
+        models: [],
+      });
+    }
+    await store.saveConfig();
+    const res = await fetch(`${baseUrl}/channels/order`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: ['c3', 'c1'] }),
+    });
+    expect(res.status).toBe(200);
+    const list = (await fetch(`${baseUrl}/channels`).then((r) => r.json())) as {
+      channels: { id: string }[];
+    };
+    expect(list.channels.map((c) => c.id)).toEqual(['c3', 'c1', 'c2']);
+    expect(store.getConfig().channels.map((c) => c.id)).toEqual(['c3', 'c1', 'c2']);
+  });
+});
+
+describe('备份导入导出', () => {
+  it('导出含明文 key;导入覆盖配置、跳过非法渠道并恢复 testDefaults', async () => {
+    const { store } = await setup();
+    const exp = (await fetch(`${baseUrl}/backup/export`).then((r) => r.json())) as {
+      config: { channels: Record<string, unknown>[] };
+    };
+    expect(exp.config.channels).toHaveLength(1);
+    const rawKeys = exp.config.channels[0]!.keys as { key: string }[];
+    expect(rawKeys[0]!.key).toBe(KEY);
+
+    await fetch(`${baseUrl}/channels/c1`, { method: 'DELETE' });
+    const res = await fetch(`${baseUrl}/backup/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        config: {
+          channels: [
+            { ...exp.config.channels[0], id: 'imported', name: 'backup' },
+            { name: '', baseUrl: 'not-a-url' },
+          ],
+          testDefaults: { intervalMs: 2500, timeoutMs: 5000, repeat: 3 },
+        },
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ imported: 1, skipped: 1 });
+
+    const list = (await fetch(`${baseUrl}/channels`).then((r) => r.json())) as {
+      channels: { id: string; keys: { key: string }[] }[];
+      testDefaults: { intervalMs: number; repeat: number };
+    };
+    expect(list.channels.map((c) => c.id)).toEqual(['imported']);
+    expect(list.channels[0]!.keys[0]!.key).toBe(mask(KEY));
+    expect(list.testDefaults).toMatchObject({ intervalMs: 2500, repeat: 3 });
+    expect(store.getConfig().channels[0]!.keys[0]!.key).toBe(KEY);
+  });
+
+  it('备份中没有合法渠道 → 400', async () => {
+    await setup();
+    const res = await fetch(`${baseUrl}/backup/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: { channels: [{ name: '', baseUrl: 'bad' }] } }),
+    });
+    expect(res.status).toBe(400);
+  });
+});

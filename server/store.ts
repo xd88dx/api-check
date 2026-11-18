@@ -19,6 +19,8 @@ export interface ChannelModel {
   selected: boolean;
   source: ModelSource;
   contextHint?: string;
+  /** 最近一次目录拉取中已不存在(仅对保留的已勾选模型置位) */
+  stale?: boolean;
 }
 
 export interface Channel {

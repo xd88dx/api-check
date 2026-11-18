@@ -1,7 +1,8 @@
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PublicChannel } from '../types';
 import EmptyState from './EmptyState';
-import { TrashIcon } from './icons';
+import { GripIcon, TrashIcon } from './icons';
 
 interface Props {
   channels: PublicChannel[] | null;
@@ -9,6 +10,7 @@ interface Props {
   onAdd: () => void;
   onEdit: (id: string) => void;
   onDelete: (ch: PublicChannel) => void;
+  onReorder: (ids: string[]) => void;
 }
 
 export default function ChannelList({
@@ -17,8 +19,23 @@ export default function ChannelList({
   onAdd,
   onEdit,
   onDelete,
+  onReorder,
 }: Props) {
   const { t } = useTranslation();
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const dragEndedAt = useRef(0);
+
+  const handleDrop = (targetId: string) => {
+    if (!dragId || dragId === targetId || !channels) return;
+    const ids = channels.map((c) => c.id);
+    const from = ids.indexOf(dragId);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    ids.splice(from, 1);
+    ids.splice(to, 0, dragId);
+    onReorder(ids);
+  };
   return (
     <main className="content">
       <div className="content-head">
@@ -42,6 +59,7 @@ export default function ChannelList({
         <table className="channel-table">
           <thead>
             <tr>
+              <th className="drag-cell" />
               <th>{t('channel.name')}</th>
               <th>{t('channel.enabled')}</th>
               <th>{t('channel.keysCount')}</th>
@@ -50,11 +68,52 @@ export default function ChannelList({
           </thead>
           <tbody>
             {channels.map((c) => (
-              <tr key={c.id}>
+              <tr
+                key={c.id}
+                draggable
+                tabIndex={0}
+                className={`${dragId === c.id ? 'dragging' : ''} ${
+                  overId === c.id && dragId !== c.id ? 'drop-target' : ''
+                }`}
+                onDragStart={(e) => {
+                  setDragId(c.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (overId !== c.id) setOverId(c.id);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  handleDrop(c.id);
+                  setDragId(null);
+                  setOverId(null);
+                }}
+                onDragEnd={() => {
+                  dragEndedAt.current = Date.now();
+                  setDragId(null);
+                  setOverId(null);
+                }}
+                onClick={() => {
+                  if (Date.now() - dragEndedAt.current < 200) return;
+                  onEdit(c.id);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onEdit(c.id);
+                  }
+                }}
+              >
+                <td
+                  className="drag-cell"
+                  title={t('channel.drag')}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <GripIcon />
+                </td>
                 <td>
-                  <button type="button" className="link row-name" onClick={() => onEdit(c.id)}>
-                    {c.name}
-                  </button>
+                  <span className="row-name">{c.name}</span>
                   <span className="row-sub mono">{c.baseUrl}</span>
                 </td>
                 <td>
@@ -69,7 +128,10 @@ export default function ChannelList({
                     className="icon-btn danger"
                     title={t('channel.delete')}
                     aria-label={t('channel.delete')}
-                    onClick={() => onDelete(c)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(c);
+                    }}
                   >
                     <TrashIcon />
                   </button>

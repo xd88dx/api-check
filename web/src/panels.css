@@ -76,16 +76,47 @@
   margin: var(--sp-2) 0 var(--sp-3);
 }
 /* 手动添加组在左（输入框+按钮各自完整圆角），过滤框在右 */
-.catalog-add-manual {
+.field-wrap {
+  position: relative;
   display: flex;
-  align-items: stretch;
-  gap: var(--sp-2);
+  align-items: center;
 }
-.catalog-add-manual input { width: 300px; }
+.field-wrap > input { width: 100%; }
+.field-btn {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--muted);
+}
+.field-btn:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.field-btn:active:not(:disabled) { transform: translateY(-50%); }
+.field-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: translateY(-50%);
+}
+.field-clear:hover:not(:disabled) { color: var(--danger); background: var(--danger-soft); }
+.catalog-filter-wrap { width: 280px; margin-right: auto; }
+.catalog-add-manual { width: 320px; margin-left: auto; }
+.catalog-add-manual input { padding-right: 32px; }
 .catalog-filter {
-  width: 280px;
-  margin-left: auto;
+  width: 100%;
   padding-left: 30px;
+  padding-right: 30px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: 10px center;
@@ -118,6 +149,21 @@
 }
 .chip.manual { border-style: dashed; }
 .chip.manual.selected { border-style: solid; }
+/* 目录外模型(手动添加 / 最近目录中已消失):琥珀黄提示 */
+.chip.chip-missing {
+  background: var(--warn-soft);
+  border-color: var(--warn-border);
+  color: var(--warn);
+}
+.chip.chip-missing:hover { border-color: var(--warn); color: var(--warn); }
+.chip.chip-missing.selected {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+  box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.14);
+}
+.chip.chip-missing .chip-name { color: var(--warn); }
+.chip.chip-missing .chip-copy { color: var(--warn); }
 .chip input { margin: 0; }
 .chip-name { font-family: var(--font-mono); font-size: 12.5px; }
 .chip-hint { color: var(--muted); font-size: 11px; }
@@ -227,11 +273,14 @@
   position: sticky;
   left: 0;
   z-index: 1;
+  width: 60%;
   background: var(--surface);
   text-align: left;
   font-family: var(--font-mono);
   font-weight: 600;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   box-shadow: 1px 0 0 var(--border);
 }
 .matrix-table thead th.matrix-model { z-index: 3; background: var(--surface-tint); }
@@ -259,14 +308,19 @@
   50% { opacity: 0.16; }
 }
 .matrix-running { color: var(--accent); font-weight: 700; }
-.matrix-cell-meta {
-  display: flex;
-  flex-direction: column;
+.matrix-table tbody tr { height: 46px; }
+.matrix-cell-inner {
+  display: inline-flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.matrix-cell-meta {
   color: var(--muted);
   font-size: 11px;
-  margin-top: 3px;
+  white-space: nowrap;
 }
 
 /* ---------- 弹窗 ---------- */
@@ -294,6 +348,8 @@
   animation: modal-in 0.18s var(--ease);
 }
 .modal h3 { margin: 0 0 var(--sp-3); font-size: 16px; }
+.gist-modal { max-width: 500px; }
+.gist-modal h3 { margin-bottom: var(--sp-4); }
 .modal input { width: 100%; }
 .modal p { margin: 0 0 var(--sp-3); color: var(--muted); font-size: 13px; }
 .modal-actions {
@@ -335,5 +391,6 @@
   .probe-row .probe-latency { grid-area: latency; text-align: right; }
   .matrix-cell { min-width: 108px; }
   .catalog-add-manual, .catalog-add, .probe-model-input { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+  .catalog-filter-wrap, .catalog-add-manual { width: 100%; }
   .catalog-add-manual input, .catalog-filter, .probe-model-input input { min-width: 0; }
 }

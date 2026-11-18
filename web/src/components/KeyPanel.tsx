@@ -204,7 +204,7 @@ export default function KeyPanel({ channel, onError }: Props) {
                     )}
                   </div>
                 </td>
-                <td>
+                <td className="check-cell">
                   <input
                     type="checkbox"
                     checked={r.enabled}

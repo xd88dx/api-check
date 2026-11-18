@@ -50,6 +50,35 @@ export function TrashIcon({ size = 15 }: IconProps) {
   );
 }
 
+export function PlusIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+export function XIcon({ size = 13 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
+export function GripIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="9" cy="6" r="1.7" />
+      <circle cx="15" cy="6" r="1.7" />
+      <circle cx="9" cy="12" r="1.7" />
+      <circle cx="15" cy="12" r="1.7" />
+      <circle cx="9" cy="18" r="1.7" />
+      <circle cx="15" cy="18" r="1.7" />
+    </svg>
+  );
+}
+
 export function InboxIcon({ size = 26 }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

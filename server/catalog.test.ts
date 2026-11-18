@@ -94,4 +94,26 @@ describe('mergeCatalog（手动模型不删、只增不删已勾选）', () => {
     const merged = mergeCatalog([], [{ id: 'new-model' }]);
     expect(merged[0]).toMatchObject({ id: 'new-model', selected: false, source: 'catalog' });
   });
+
+  it('上游顺序不稳定时,合并结果按 id 稳定排序', () => {
+    const a = mergeCatalog([], [{ id: 'b' }, { id: 'a' }, { id: 'c' }]);
+    const b = mergeCatalog([], [{ id: 'c' }, { id: 'a' }, { id: 'b' }]);
+    expect(a.map((m) => m.id)).toEqual(['a', 'b', 'c']);
+    expect(b.map((m) => m.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('manual 与目录同 id 时只保留 manual 一行', () => {
+    const merged = mergeCatalog([{ id: 'x', selected: true, source: 'manual' }], [{ id: 'x' }]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ id: 'x', source: 'manual' });
+  });
+
+  it('已勾选但目录中消失的模型标记 stale,重新出现后清除', () => {
+    const existing = [{ id: 'gone', selected: true, source: 'catalog' as const }];
+    const stale = mergeCatalog(existing, [{ id: 'kept' }]);
+    expect(stale.find((m) => m.id === 'gone')).toMatchObject({ stale: true });
+    expect(stale.find((m) => m.id === 'kept')?.stale).toBeUndefined();
+    const back = mergeCatalog(stale, [{ id: 'gone' }, { id: 'kept' }]);
+    expect(back.find((m) => m.id === 'gone')?.stale).toBeUndefined();
+  });
 });

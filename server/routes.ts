@@ -6,7 +6,7 @@ import { mask } from './mask.js';
 import { acquireTask, getTask, runProbe, runCatalog, stopAllTestTasks } from './tasks.js';
 import { runTest } from './runner.js';
 import { pickMainProtocol } from './probe.js';
-import { pushCore, pullCore, syncCore, scheduleMutationSync } from './gistsync.js';
+import { pushCore, pullCore, syncCore, scheduleMutationSync, normalizeChannel } from './gistsync.js';
 
 // ---------- zod schemas ----------
 
@@ -60,6 +60,57 @@ const modelsUpdateSchema = z
       v.selected !== undefined || v.addManual !== undefined || v.removeManual !== undefined,
     'empty body',
   );
+
+const channelOrderSchema = z.object({
+  ids: z.array(z.string().min(1)).max(1000),
+});
+
+const backupChannelSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().trim().min(1).max(100),
+  baseUrl: baseUrlSchema,
+  insecure: z.boolean().optional(),
+  enabled: z.boolean().optional(),
+  createdAt: z.string().optional(),
+  keys: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        label: z.string().trim().min(1).max(100),
+        key: z.string().min(1),
+        enabled: z.boolean().optional(),
+        concurrency: z.number().int().min(1).max(16).optional(),
+        createdAt: z.string().optional(),
+      }),
+    )
+    .max(100)
+    .optional()
+    .default([]),
+  models: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        selected: z.boolean().optional(),
+        source: z.enum(['catalog', 'manual']).optional(),
+        contextHint: z.string().optional(),
+      }),
+    )
+    .optional()
+    .default([]),
+});
+
+const backupSchema = z.object({
+  config: z.object({
+    channels: z.array(z.unknown()),
+    testDefaults: z
+      .object({
+        intervalMs: z.number().optional(),
+        timeoutMs: z.number().optional(),
+        repeat: z.number().optional(),
+      })
+      .optional(),
+  }),
+});
 
 const testStartSchema = z.object({
   modelIds: z.array(z.string().min(1)).optional(),
@@ -249,7 +300,7 @@ function replaceKeys(ch: Channel, entries: z.infer<typeof keyEntrySchema>[]): Ch
 
 export function createRouter(store: Store, password = ''): Router {
   const r = Router();
-  r.use(expressJson());
+  r.use(expressJson({ limit: '5mb' }));
   r.use(authGuard(password));
 
   // 登录：校验密码 → {ok:true}；密码即凭据，不发 session/token
@@ -292,6 +343,26 @@ export function createRouter(store: Store, password = ''): Router {
     void store.saveConfig();
     scheduleMutationSync(store);
     res.status(201).json({ channel: toPublicChannel(ch) });
+  });
+
+  // 拖动排序:按 ids 重排;未列出或重复的渠道按原顺序补到末尾
+  r.put('/channels/order', (req, res) => {
+    const { ids } = channelOrderSchema.parse(req.body);
+    const cfg = store.getConfig();
+    const byId = new Map(cfg.channels.map((c) => [c.id, c]));
+    const next: Channel[] = [];
+    for (const id of ids) {
+      const ch = byId.get(id);
+      if (!ch) continue;
+      next.push(ch);
+      byId.delete(id);
+    }
+    for (const ch of cfg.channels) {
+      if (byId.has(ch.id)) next.push(ch);
+    }
+    cfg.channels = next;
+    void store.saveConfig();
+    res.json({ ok: true, ids: next.map((c) => c.id) });
   });
 
   // 更新渠道
@@ -505,6 +576,45 @@ export function createRouter(store: Store, password = ''): Router {
   });
 
   // ---- M4：导出（渠道信息 + 勾选模型清单 + 最近矩阵结果摘要；不含任何 key 字段） ----
+  // ---- 备份:导出配置态全量(含 key 明文,与 Gist 负载同构);导入覆盖本地配置 ----
+  r.get('/backup/export', (_req, res) => {
+    const cfg = store.getConfig();
+    res.json({
+      app: 'api-check',
+      version: 1,
+      exported_at: Date.now(),
+      config: { channels: cfg.channels, testDefaults: cfg.testDefaults },
+    });
+  });
+
+  r.post('/backup/import', (req, res) => {
+    const body = backupSchema.parse(req.body);
+    const imported: Channel[] = [];
+    let skipped = 0;
+    for (const raw of body.config.channels) {
+      const parsed = backupChannelSchema.safeParse(raw);
+      if (!parsed.success) {
+        skipped += 1;
+        continue;
+      }
+      imported.push(normalizeChannel(parsed.data as Record<string, unknown>) as unknown as Channel);
+    }
+    if (imported.length === 0) throw new HttpError(400, '备份中没有可用渠道');
+    const cfg = store.getConfig();
+    cfg.channels = imported;
+    const td = body.config.testDefaults;
+    if (td) {
+      const num = (v: number | undefined, d: number) => (Number.isFinite(v) ? Number(v) : d);
+      cfg.testDefaults = {
+        intervalMs: num(td.intervalMs, cfg.testDefaults.intervalMs),
+        timeoutMs: num(td.timeoutMs, cfg.testDefaults.timeoutMs),
+        repeat: num(td.repeat, cfg.testDefaults.repeat),
+      };
+    }
+    void store.saveConfig();
+    res.json({ ok: true, imported: imported.length, skipped });
+  });
+
   r.get('/channels/:id/export', (req, res) => {
     const ch = findChannel(store, req.params.id);
     const payload = buildExportPayload(ch, store.getState().channels[ch.id]);

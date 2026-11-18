@@ -58,6 +58,8 @@ export interface PublicModel {
   selected: boolean;
   source: 'catalog' | 'manual';
   contextHint?: string;
+  /** 最近一次目录拉取中已不存在 */
+  stale?: boolean;
 }
 
 export interface PublicChannel {
@@ -107,4 +109,15 @@ export interface GistStatus {
   gistId: string;
   syncedAt: number | null;
   lastResult: string;
+}
+
+/** 备份文件(GET /api/backup/export;与 Gist 负载同构,channels 内含 key 明文) */
+export interface BackupPayload {
+  app: string;
+  version: number;
+  exported_at: number;
+  config: {
+    channels: unknown[];
+    testDefaults: TestDefaults;
+  };
 }

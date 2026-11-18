@@ -153,19 +153,24 @@ export function mergeCatalog(
   existing: ChannelModel[],
   fetched: CatalogModel[],
 ): ChannelModel[] {
-  const fetchedIds = new Set(fetched.map((f) => f.id));
+  // 上游目录顺序不稳定,按 id 排序后再合并,保证同一目录多次拉取后展示顺序一致
+  const sorted = [...fetched].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const fetchedIds = new Set(sorted.map((f) => f.id));
   const result: ChannelModel[] = [];
   const staleSelected: ChannelModel[] = [];
   for (const m of existing) {
     if (m.source === 'manual') {
       result.push(m); // manual 永不删
     } else if (m.selected && !fetchedIds.has(m.id)) {
-      staleSelected.push(m); // 已勾选但上游已无 → 保留
+      staleSelected.push({ ...m, stale: true }); // 已勾选但上游已无 → 保留并标记过期
     }
     // 未勾选且上游已无的 catalog 模型 → 移除（下方按新目录重排）
   }
   const existingById = new Map(existing.map((m) => [m.id, m]));
-  for (const f of fetched) {
+  const seen = new Set(result.map((m) => m.id));
+  for (const f of sorted) {
+    if (seen.has(f.id)) continue; // manual 与目录同 id 时以 manual 行为准,不重复
+    seen.add(f.id);
     const old = existingById.get(f.id);
     result.push({
       id: f.id,

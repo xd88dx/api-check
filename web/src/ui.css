@@ -175,3 +175,62 @@
   .modal,
   .modal-backdrop { animation: none; }
 }
+
+/* 顶栏操作区 / 宽弹窗 / 轻提示 */
+.hd-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.modal-wide {
+  max-width: 640px;
+  max-height: 90vh;
+  overflow: auto;
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  max-width: 90vw;
+  padding: 10px 20px;
+  border-radius: var(--radius-m);
+  background: #1f2937;
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  z-index: 120;
+  animation: fade-in 0.18s var(--ease);
+}
+
+/* 渠道列表:拖动排序与整行跳转 */
+.channel-table tbody tr { cursor: pointer; }
+.channel-table tbody tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.channel-table tbody tr.dragging { opacity: 0.45; }
+.channel-table tbody tr.drop-target td { box-shadow: inset 0 2px 0 var(--accent); }
+.drag-cell,
+.channel-table th.drag-cell {
+  width: 34px;
+  padding-right: 4px;
+  text-align: center !important;
+  color: #b9c2cf;
+  cursor: grab;
+}
+.drag-cell:active { cursor: grabbing; }
+.row-name { display: block; font-weight: 600; color: var(--accent); }
+
+/* 密钥表:勾选框垂直居中 */
+.check-cell {
+  text-align: center;
+  vertical-align: middle;
+  line-height: 0;
+}
+.check-cell input {
+  display: inline-block;
+  margin: 0;
+  vertical-align: middle;
+}

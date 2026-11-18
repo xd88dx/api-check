@@ -152,7 +152,7 @@ export async function pushCore(store: Store, reason: string): Promise<SyncOutcom
 }
 
 // Gist 内容 → 本地渠道形状的最小归一化（缺省值补齐，id 缺失时生成）
-function normalizeChannel(raw: Record<string, unknown>): Record<string, unknown> {
+export function normalizeChannel(raw: Record<string, unknown>): Record<string, unknown> {
   const now = new Date().toISOString();
   return {
     id: String(raw.id ?? '') || randomUUID(),

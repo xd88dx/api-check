@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../api';
 import type { PublicChannel, TaskState } from '../types';
 import EmptyState from './EmptyState';
-import { CopyIcon } from './icons';
+import { CopyIcon, PlusIcon, XIcon } from './icons';
 
 interface Props {
   channel: PublicChannel;
@@ -160,7 +160,26 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
       )}
       {/* M6 §13.3：手动添加组在左、过滤框在右，同一行 */}
       <div className="catalog-add">
-        <div className="catalog-add-manual">
+        <div className="field-wrap catalog-filter-wrap">
+          <input
+            className="catalog-filter"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder={t('catalog.filterPlaceholder')}
+          />
+          {filter && (
+            <button
+              type="button"
+              className="field-btn field-clear"
+              title={t('common.clear')}
+              aria-label={t('common.clear')}
+              onClick={() => setFilter('')}
+            >
+              <XIcon size={13} />
+            </button>
+          )}
+        </div>
+        <div className="field-wrap catalog-add-manual">
           <input
             value={manualName}
             onChange={(e) => setManualName(e.target.value)}
@@ -172,14 +191,17 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
               }
             }}
           />
-          <button type="button" className="ghost" onClick={() => void addManual()}>{t('catalog.addManual')}</button>
+          <button
+            type="button"
+            className="field-btn field-add"
+            title={t('catalog.addManual')}
+            aria-label={t('catalog.addManual')}
+            disabled={!manualName.trim()}
+            onClick={() => void addManual()}
+          >
+            <PlusIcon size={14} />
+          </button>
         </div>
-        <input
-          className="catalog-filter"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder={t('catalog.filterPlaceholder')}
-        />
       </div>
       {channel.models.length === 0 ? (
         <EmptyState text={t('catalog.empty')} />
@@ -188,7 +210,12 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
       ) : (
         <div className="chips">
           {visibleModels.map((m) => (
-            <label key={m.id} className={`chip ${m.selected ? 'selected' : ''} ${m.source}`}>
+            <label
+              key={m.id}
+              className={`chip ${m.selected ? 'selected' : ''} ${m.source} ${
+                m.source === 'manual' || m.stale ? 'chip-missing' : ''
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={m.selected}

@@ -286,7 +286,7 @@ export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs,
           <tbody>
             {selectedModels.map((m) => (
               <tr key={m.id}>
-                <th className="matrix-model">{m.id}</th>
+                <th className="matrix-model" title={m.id}>{m.id}</th>
                 {enabledKeys.map((k) => {
                   const cell = results?.[m.id]?.[k.id];
                   const isCurrent = task?.current?.modelId === m.id && task?.current?.keyId === k.id;
@@ -309,20 +309,20 @@ export default function MatrixPanel({ channel, defaultRepeat, defaultIntervalMs,
                       title={tooltip}
                     >
                       {cell ? (
-                        <span className={`cls-badge cls-${color}`}>
-                          {t(`matrix.cls.${cell.cls}`)}
+                        <span className="matrix-cell-inner">
+                          <span className={`cls-badge cls-${color}`}>
+                            {t(`matrix.cls.${cell.cls}`)}
+                          </span>
+                          <span className="matrix-cell-meta">
+                            {formatLatency(cell.latencyMs, t)}
+                            {cell.httpStatus !== null && cell.cls !== 'ok' ? ` · ${cell.httpStatus}` : ''}
+                            {retryNote ? ` · ${retryNote}` : ''}
+                          </span>
                         </span>
                       ) : isCurrent ? (
                         <span className="matrix-running">…</span>
                       ) : null}
-                      {cell && (
-                        <span className="matrix-cell-meta">
-                          <span>{formatLatency(cell.latencyMs, t)}</span>
-                          {cell.httpStatus !== null && cell.cls !== 'ok' && <span>{cell.httpStatus}</span>}
-                          {retryNote && <span className="matrix-retry-note">{retryNote}</span>}
-                        </span>
-                      )}
-                    </td>
+                                          </td>
                   );
                 })}
               </tr>

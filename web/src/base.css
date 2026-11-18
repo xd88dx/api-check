@@ -358,6 +358,7 @@ input[type='number'] { font-variant-numeric: tabular-nums; }
   border: 1px solid var(--warn-border);
   padding: 10px 14px;
   border-radius: var(--radius-m);
+  margin-bottom: var(--sp-4);
   font-size: 13px;
 }
 

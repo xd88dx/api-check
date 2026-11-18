@@ -1,4 +1,11 @@
-import type { GistStatus, KeyInput, PublicChannel, TaskState, TestDefaults } from './types';
+import type {
+  BackupPayload,
+  GistStatus,
+  KeyInput,
+  PublicChannel,
+  TaskState,
+  TestDefaults,
+} from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -113,6 +120,15 @@ export const api = {
   },
   deleteChannel(id: string): Promise<{ ok: boolean }> {
     return request(`/channels/${id}`, { method: 'DELETE' });
+  },
+  reorderChannels(ids: string[]): Promise<{ ok: boolean; ids: string[] }> {
+    return request('/channels/order', { method: 'PUT', body: JSON.stringify({ ids }) });
+  },
+  exportBackup(): Promise<BackupPayload> {
+    return request('/backup/export');
+  },
+  importBackup(payload: unknown): Promise<{ ok: boolean; imported: number; skipped: number }> {
+    return request('/backup/import', { method: 'POST', body: JSON.stringify(payload) });
   },
   replaceKeys(id: string, keys: KeyInput[]): Promise<{ channel: PublicChannel }> {
     return request(`/channels/${id}/keys`, {
