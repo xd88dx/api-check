@@ -246,3 +246,18 @@ describe('备份导入导出', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('目录外模型删除(removeModels)', () => {
+  it('按 id 删除任意来源的模型', async () => {
+    const { store } = await setup();
+    const res = await fetch(`${baseUrl}/channels/c1/models`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ removeModels: ['m1'] }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { channel: { models: { id: string }[] } };
+    expect(body.channel.models).toEqual([]);
+    expect(store.getConfig().channels[0]!.models).toEqual([]);
+  });
+});

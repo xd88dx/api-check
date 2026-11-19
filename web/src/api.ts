@@ -142,7 +142,12 @@ export const api = {
   },
   updateModels(
     id: string,
-    body: { selected?: string[]; addManual?: string[]; removeManual?: string[] },
+    body: {
+      selected?: string[];
+      addManual?: string[];
+      removeManual?: string[];
+      removeModels?: string[];
+    },
   ): Promise<{ channel: PublicChannel }> {
     return request(`/channels/${id}/models`, { method: 'PUT', body: JSON.stringify(body) });
   },

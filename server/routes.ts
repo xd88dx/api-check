@@ -54,10 +54,14 @@ const modelsUpdateSchema = z
     selected: z.array(z.string().min(1)).optional(),
     addManual: z.array(z.string().min(1)).optional(),
     removeManual: z.array(z.string().min(1)).optional(),
+    removeModels: z.array(z.string().min(1)).optional(),
   })
   .refine(
     (v) =>
-      v.selected !== undefined || v.addManual !== undefined || v.removeManual !== undefined,
+      v.selected !== undefined ||
+      v.addManual !== undefined ||
+      v.removeManual !== undefined ||
+      v.removeModels !== undefined,
     'empty body',
   );
 
@@ -423,6 +427,10 @@ export function createRouter(store: Store, password = ''): Router {
     if (body.removeManual) {
       const rm = new Set(body.removeManual);
       ch.models = ch.models.filter((m) => !(m.source === 'manual' && rm.has(m.id)));
+    }
+    if (body.removeModels) {
+      const rm = new Set(body.removeModels);
+      ch.models = ch.models.filter((m) => !rm.has(m.id));
     }
     if (body.selected) {
       const set = new Set(body.selected);

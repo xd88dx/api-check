@@ -110,6 +110,7 @@ const en: Dict = {
   'catalog.filterPlaceholder': 'Filter by name (does not affect selection/manual add/refresh)',
   'catalog.noMatch': 'No matching models',
   'catalog.copyModel': 'Copy model id',
+  'catalog.removeModel': 'Remove model',
   'catalog.copyFailed': 'Failed to copy model id',
 
   'matrix.title': 'Matrix Test',

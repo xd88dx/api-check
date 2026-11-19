@@ -122,8 +122,8 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
     await onRefresh();
   };
 
-  const removeManual = async (id: string) => {
-    await api.updateModels(channel.id, { removeManual: [id] });
+  const removeModel = async (id: string) => {
+    await api.updateModels(channel.id, { removeModels: [id] });
     await onRefresh();
   };
 
@@ -237,8 +237,20 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
               </button>
               {copiedModelId === m.id && <span className="chip-copied">{t('common.copied')}</span>}
               {m.contextHint && <span className="chip-hint">{m.contextHint}</span>}
-              {m.source === 'manual' && (
-                <button type="button" className="chip-x" onClick={() => void removeManual(m.id)}>×</button>
+              {(m.source === 'manual' || m.stale) && (
+                <button
+                  type="button"
+                  className="chip-x"
+                  title={t('catalog.removeModel')}
+                  aria-label={t('catalog.removeModel')}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void removeModel(m.id);
+                  }}
+                >
+                  ×
+                </button>
               )}
             </label>
           ))}

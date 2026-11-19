@@ -106,6 +106,7 @@ const zh = {
   'catalog.filterPlaceholder': '关键字过滤（不影响勾选/手动添加/重取）',
   'catalog.noMatch': '没有匹配的模型',
   'catalog.copyModel': '复制模型名',
+  'catalog.removeModel': '移除模型',
   'catalog.copyFailed': '复制模型名失败',
 
   'matrix.title': '矩阵测试',
