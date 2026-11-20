@@ -16,6 +16,7 @@ const dirs: string[] = [];
 const stores: Store[] = [];
 
 afterAll(async () => {
+  await Promise.all(stores.map((s) => s.flush()));
   await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })));
 });
 afterEach(async () => {

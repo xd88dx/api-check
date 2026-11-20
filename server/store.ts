@@ -221,17 +221,22 @@ export class Store {
 
   /** 原子落盘 config；并发调用串行化 */
   saveConfig(): Promise<void> {
-    this.configQueue = this.configQueue.then(() =>
-      atomicWriteFile(this.configPath, JSON.stringify(this.config, null, 2)),
-    );
-    return this.configQueue;
+    const run = () => atomicWriteFile(this.configPath, JSON.stringify(this.config, null, 2));
+    const write = this.configQueue.then(run, run);
+    this.configQueue = write.catch(() => {});
+    return write;
   }
 
   /** 原子落盘 state；并发调用串行化 */
   saveState(): Promise<void> {
-    this.stateQueue = this.stateQueue.then(() =>
-      atomicWriteFile(this.statePath, JSON.stringify(this.state, null, 2)),
-    );
-    return this.stateQueue;
+    const run = () => atomicWriteFile(this.statePath, JSON.stringify(this.state, null, 2));
+    const write = this.stateQueue.then(run, run);
+    this.stateQueue = write.catch(() => {});
+    return write;
+  }
+
+  async flush(): Promise<void> {
+    await this.configQueue;
+    await this.stateQueue;
   }
 }
