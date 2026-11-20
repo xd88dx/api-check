@@ -98,19 +98,31 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
     }
   };
 
+  // 过滤只影响展示，不影响勾选状态/手动添加/重取（§12.3）
+  const kw = filter.trim().toLowerCase();
+  const visibleModels = kw
+    ? channel.models.filter((m) => m.id.toLowerCase().includes(kw))
+    : channel.models;
+
   const toggle = async (id: string, selected: boolean) => {
     const next = channel.models.map((m) => (m.id === id ? { ...m, selected } : m));
     await api.updateModels(channel.id, { selected: next.filter((m) => m.selected).map((m) => m.id) });
     await onRefresh();
   };
 
+  // 筛选生效时，全选/全不选只作用于当前可见（筛选结果）的模型，范围外勾选保持不变
   const selectAll = async () => {
-    await api.updateModels(channel.id, { selected: channel.models.map((m) => m.id) });
+    const selected = new Set(channel.models.filter((m) => m.selected).map((m) => m.id));
+    for (const m of visibleModels) selected.add(m.id);
+    await api.updateModels(channel.id, { selected: [...selected] });
     await onRefresh();
   };
 
   const selectNone = async () => {
-    await api.updateModels(channel.id, { selected: [] });
+    const visible = new Set(visibleModels.map((m) => m.id));
+    await api.updateModels(channel.id, {
+      selected: channel.models.filter((m) => m.selected && !visible.has(m.id)).map((m) => m.id),
+    });
     await onRefresh();
   };
 
@@ -129,11 +141,6 @@ export default function CatalogPanel({ channel, onError, onRefresh }: Props) {
 
   const running = task?.running === true;
   const catalogAt = channel.state?.catalogAt;
-  // 过滤只影响展示，不影响勾选状态/手动添加/重取（§12.3）
-  const kw = filter.trim().toLowerCase();
-  const visibleModels = kw
-    ? channel.models.filter((m) => m.id.toLowerCase().includes(kw))
-    : channel.models;
 
   return (
     <section className="catalog-panel">
